@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor() {
             this.player = {
                 superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
-                firstPlaysThisTurn: new Set() // Śledzi pierwszy zagrany typ karty w turze
+                firstPlaysThisTurn: new Set()
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
@@ -43,15 +43,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     text: document.getElementById('choice-modal-text'),
                     yesBtn: document.getElementById('choice-yes-btn'),
                     noBtn: document.getElementById('choice-no-btn'),
+                    // ZAKTUALIZOWANA FUNKCJA
                     waitForChoice: (prompt, card) => {
                         return new Promise(resolve => {
                             this.ui.choiceModal.title.textContent = "Podejmij decyzję";
                             this.ui.choiceModal.text.textContent = prompt;
                             this.ui.choiceModal.cardDisplay.innerHTML = '';
                             this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
+                            
                             this.ui.choiceModal.element.classList.add('active');
-                            this.ui.choiceModal.yesBtn.onclick = () => { this.ui.choiceModal.element.classList.remove('active'); resolve('yes'); };
-                            this.ui.choiceModal.noBtn.onclick = () => { this.ui.choiceModal.element.classList.remove('active'); resolve('no'); };
+
+                            const resolvePromise = (choice) => {
+                                this.ui.choiceModal.element.classList.remove('active');
+                                resolve(choice);
+                            };
+
+                            this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
+                            this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
                         });
                     }
                 },
@@ -63,25 +71,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         return new Promise(resolve => {
                             this.ui.cardSelectionModal.title.textContent = prompt;
                             this.ui.cardSelectionModal.cardList.innerHTML = '';
+                            
                             const resolvePromise = (card) => {
                                 this.ui.cardSelectionModal.element.classList.remove('active');
-                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); // Clean up listener
+                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler);
                                 resolve(card);
                             };
+
                             cardsToChooseFrom.forEach(card => {
                                 const cardElement = this.createCardElement(card, 'selection');
                                 cardElement.addEventListener('click', (event) => {
-                                    event.stopPropagation(); // Prevent the background click from firing
+                                    event.stopPropagation();
                                     resolvePromise(card)
                                 });
                                 this.ui.cardSelectionModal.cardList.appendChild(cardElement);
                             });
+
                             const closeModalHandler = (e) => {
                                 if (e.target === this.ui.cardSelectionModal.element) {
                                     resolvePromise(null);
                                 }
                             };
                             this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
+
                             this.ui.cardSelectionModal.element.classList.add('active');
                         });
                     }
@@ -131,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
             this.player.hand = []; this.player.played = []; this.player.power = 0;
-            this.player.firstPlaysThisTurn.clear(); // Czyścimy śledzenie na koniec tury
+            this.player.firstPlaysThisTurn.clear();
             console.log("Karty z ręki i zagrane przeniesione do odrzutów. Moc zresetowana.");
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
@@ -158,12 +170,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         async executeCardEffects(card) {
             if (!card.effect_tags || card.effect_tags.length === 0) return;
-            // Używamy pętli for...of aby poprawnie obsłużyć 'await'
             for (const tag of card.effect_tags) {
                 const [effectName, ...params] = tag.split(':');
                 if (effectHandlers[effectName]) {
                     console.log(`Uruchamianie efektu: ${effectName} z parametrami: ${params}`);
-                    await effectHandlers[effectName](this, params); // Czekamy na zakończenie efektu
+                    await effectHandlers[effectName](this, params);
                 } else {
                     console.warn(`Nieznany tag efektu: ${effectName}`);
                 }
@@ -172,12 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         checkOngoingEffects(playedCard) {
             const playedType = playedCard.type.toLowerCase();
-            // Sprawdź, czy karta tego typu była już zagrana w tej turze
-            if (this.player.firstPlaysThisTurn.has(playedType)) {
-                return; // Jeśli tak, nie rób nic
-            }
-
-            // Jeśli nie, sprawdź czy jakaś lokacja ma na to trigger
+            if (this.player.firstPlaysThisTurn.has(playedType)) { return; }
             this.player.locations.forEach(location => {
                 location.effect_tags.forEach(tag => {
                     const match = tag.match(/on_play_first_(.*)_per_turn_draw_1/);
@@ -185,13 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         const triggerType = match[1].toLowerCase();
                         if (triggerType === playedType) {
                             console.log(`Efekt Lokacji (${location.name_pl}): Dobranie karty za zagranie pierwszego ${playedType}.`);
-                            this.drawCard(false); // Dobierz kartę bez renderowania
+                            this.drawCard(false);
                         }
                     }
                 });
             });
-
-            // Oznacz ten typ karty jako zagrany w tej turze
             this.player.firstPlaysThisTurn.add(playedType);
         }
 
@@ -199,22 +203,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) return;
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
-            
-            // Inaczej traktujemy lokacje
             if (cardToPlay.type === 'Location') {
                 this.player.locations.push(cardToPlay);
                 console.log(`Wyłożono lokację: ${cardToPlay.name_pl}`);
             } else {
                 this.player.played.push(cardToPlay);
-                // Sprawdzamy efekty lokacji tylko dla kart nie-lokacji
                 this.checkOngoingEffects(cardToPlay);
             }
-
             this.player.power += cardToPlay.power || 0;
             console.log(`Zagrnao: ${cardToPlay.name_pl}, +${cardToPlay.power || 0} Mocy.`);
-            
             await this.executeCardEffects(cardToPlay);
-
             this.renderAll();
         }
 

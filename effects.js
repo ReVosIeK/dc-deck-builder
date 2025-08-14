@@ -87,24 +87,45 @@ export const effectHandlers = {
                 console.log("Anulowano wybór karty.");
             }
         }
+        // NOWA LOGIKA DLA "X-RAY VISION"
+        else if (effectString.includes('each_opponent_reveals_deck_top_1')) {
+            if (game.mainDeck.length === 0) {
+                console.log("Talia główna jest pusta.");
+                return;
+            }
+            const topCard = game.mainDeck[game.mainDeck.length - 1];
+
+            if (topCard.type === 'Location') {
+                console.log(`Odkryto Lokację (${topCard.name_pl}), nie można jej zagrać.`);
+                // Można by tu dodać pokazanie karty graczowi, ale na razie upraszczamy
+                return;
+            }
+
+            const choice = await game.ui.choiceModal.waitForChoice(
+                `Możesz zagrać tę kartę z talii głównej:`,
+                topCard
+            );
+
+            if (choice === 'yes') {
+                console.log(`Zagrywasz tymczasowo: ${topCard.name_pl}`);
+                // Symulujemy zagranie karty: dodajemy jej moc i odpalamy efekty
+                game.player.power += topCard.power || 0;
+                await game.executeCardEffects(topCard);
+                console.log(`Efekt karty ${topCard.name_pl} zakończony. Karta wraca na wierzch talii głównej.`);
+            } else {
+                console.log(`Zdecydowano nie zagrywać karty ${topCard.name_pl}.`);
+            }
+        }
         else {
             console.warn(`Nieznany efekt on_play_effect: ${effectString}`);
         }
     },
     
-    /**
-     * NOWY EFEKT
-     * Obsługuje logikę Ataku.
-     * @param {Game} game - Instancja całej gry.
-     * @param {string[]} params - Parametry ataku, np. ['each_opponent_gains_weakness'].
-     */
     attack: (game, params) => {
         const attackString = params.join(':');
 
         if (attackString === 'each_opponent_gains_weakness') {
             console.log("Efekt Ataku: Przeciwnik otrzymuje Słabość.");
-            // W grze single-player, dla testów, dodamy słabość samemu sobie.
-            // W przyszłości można tu dodać logikę obrony.
             game.gainWeakness();
         } else {
             console.warn(`Nieznany typ ataku: ${attackString}`);

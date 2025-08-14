@@ -73,8 +73,33 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll(); console.log("Setup zakończony, plansza wyrenderowana.");
         }
 
+        endTurn() {
+            console.log("--- Koniec Tury ---");
+            // 1. Faza Czyszczenia
+            this.player.discard.push(...this.player.hand);
+            this.player.discard.push(...this.player.played);
+            this.player.hand = [];
+            this.player.played = [];
+            this.player.power = 0;
+            console.log("Karty z ręki i zagrane przeniesione do odrzutów. Moc zresetowana.");
+
+            // 2. Uzupełnienie Line-Upu
+            // Najpierw usuwamy placeholdery (null) z tablicy
+            this.lineUp = this.lineUp.filter(card => card !== null);
+            this.refillLineUp();
+            console.log("Line-Up uzupełniony.");
+
+            // 3. Dobranie Nowej Ręki
+            for(let i = 0; i < 5; i++) {
+                this.drawCard(false); // Dobieramy bez odświeżania widoku po każdej karcie
+            }
+            console.log("Dobrano nową rękę.");
+            
+            // 4. Finalne odświeżenie widoku
+            this.renderAll();
+        }
+
         refillLineUp() {
-            // Ta funkcja teraz tylko uzupełnia do 5 kart
             while (this.lineUp.length < 5 && this.mainDeck.length > 0) {
                 this.lineUp.push(this.mainDeck.pop());
             }
@@ -99,13 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.player.power >= cardToBuy.cost) {
                 this.player.power -= cardToBuy.cost;
                 this.player.discard.push(cardToBuy);
-                
-                // Zamiast usuwać kartę, wstawiamy null jako placeholder
                 this.lineUp[cardIndex] = null;
-
                 console.log(`Kupiono: ${cardToBuy.name_pl} za ${cardToBuy.cost}. Pozostało mocy: ${this.player.power}`);
-                
-                // NIE uzupełniamy już Line-Upu natychmiast
                 this.renderAll();
             } else {
                 console.log(`Za mało mocy by kupić ${cardToBuy.name_pl}. Wymagane: ${cardToBuy.cost}, Masz: ${this.player.power}`);
@@ -140,18 +160,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         createCardElement(cardData, location) {
-            // Jeśli dane karty to null, stwórz placeholder
             if (!cardData) {
                 const placeholder = document.createElement('div');
                 placeholder.className = 'card-placeholder';
                 placeholder.textContent = 'Pusty slot';
                 return placeholder;
             }
-
             const cardDiv = document.createElement('div');
             cardDiv.className = 'card';
             cardDiv.dataset.id = cardData.id;
-
             if (location === 'lineup' && this.player.power < cardData.cost) {
                 cardDiv.classList.add('unaffordable');
             } else {
@@ -160,7 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     this.handleCardClick(cardData, location);
                 });
             }
-            
             if (!['deck', 'main-deck'].includes(location)) {
                 cardDiv.addEventListener('contextmenu', (event) => {
                     event.preventDefault();
@@ -168,7 +184,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     cardInspector.classList.add('visible');
                 });
             }
-            
             if (['deck', 'main-deck'].includes(location)) { cardDiv.classList.add('is-face-down');
             } else { cardDiv.style.backgroundImage = `url('${cardData.image_path}')`; cardDiv.textContent = cardData.name_pl; }
             return cardDiv;
@@ -204,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardIdModal = document.getElementById('card-id-modal');
     const newGameBtn = document.getElementById('new-game-btn');
     const settingsBtn = document.getElementById('settings-btn');
+    const endTurnBtn = document.getElementById('end-turn-btn'); // Nowy przycisk
     const cardIdSubmitBtn = document.getElementById('card-id-submit');
     const cardSelectList = document.getElementById('card-select-list');
     const cardModalTitle = document.getElementById('card-modal-title');
@@ -281,5 +297,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     newGameBtn.addEventListener('click', () => { showScreen(gameScreen); game = new Game(); game.setupNewGame(); });
     settingsBtn.addEventListener('click', () => { showModal(settingsModal);});
+    endTurnBtn.addEventListener('click', () => {
+        if (game) {
+            game.endTurn();
+        }
+    });
     main();
 });

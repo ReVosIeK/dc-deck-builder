@@ -108,6 +108,26 @@
 
     <div id="card-inspector"></div>
 
-    <script src="script.js"></script>
+    <div id="choice-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="choice-modal-title">Podejmij decyzję</h2>
+            <div id="choice-card-display"></div>
+            <p id="choice-modal-text"></p>
+            <div class="choice-buttons">
+                <button id="choice-yes-btn">Tak</button>
+                <button id="choice-no-btn">Nie</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="card-selection-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="selection-modal-title">Wybierz kartę</h2>
+            <div id="selection-card-list" class="card-row">
+                </div>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
 </body>
 </html>

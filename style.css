@@ -114,7 +114,6 @@ body {
 .side-stack .card { width: 110px; height: 154px; }
 .side-hand-zone .card { width: 110px; height: 154px; }
 
-/* --- NOWY STYL DLA PLACEHOLDERA --- */
 .card-placeholder {
     width: 115px;
     height: 161px;
@@ -148,13 +147,12 @@ body {
     opacity: 0;
     transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
 }
-
 #card-inspector.visible {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.1);
 }
 
-/* --- PANEL INFORMACYJNY I MODALE --- */
+/* --- PANELE I MODALE --- */
 .info-panel { background-color: var(--zone-bg); padding: 10px; border-radius: 5px; display: flex; flex-direction: column; align-items: center; }
 .info-panel h2 { margin-top: 0; font-size: 1.2em; }
 .info-panel button { width: 100%; padding: 10px; font-size: 1em; margin-top: auto; }
@@ -163,8 +161,19 @@ body {
 #debug-panel button { display: block; font-size: 10px; margin: 2px 0; }
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; }
 .modal-overlay.active { display: flex; }
-.modal-content { background: var(--zone-bg); padding: 30px; border-radius: 10px; position: relative; min-width: 300px; text-align: center; }
+.modal-content { background: var(--zone-bg); padding: 30px; border-radius: 10px; position: relative; min-width: 300px; text-align: center; max-height: 80vh; overflow-y: auto; }
 .modal-content .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; }
 .setting-group { margin-bottom: 15px; text-align: left; }
 .setting-group label { display: block; margin-bottom: 5px; }
 .modal-content select, .modal-content button { width: 100%; padding: 8px; margin-top: 10px; }
+#choice-card-display { margin: 15px auto; width: 115px; height: 161px; }
+.choice-buttons { display: flex; gap: 15px; justify-content: center; margin-top: 15px; }
+.choice-buttons button { width: 100px; }
+
+/* STYLE DLA NOWEGO MODALA WYBORU KART */
+#selection-card-list {
+    flex-wrap: wrap;
+    gap: 15px;
+    padding: 10px;
+    justify-content: center;
+}

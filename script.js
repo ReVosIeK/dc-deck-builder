@@ -1,9 +1,11 @@
+// script.js
+
+import { effectHandlers } from './effects.js';
+
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Bazy Danych ---
     let allCards = [];
     let deckComposition = [];
     
-    // --- Elementy UI poza grą ---
     const cardInspector = document.getElementById('card-inspector');
     document.addEventListener('click', () => {
         if (cardInspector.classList.contains('visible')) {
@@ -11,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Klasa do zarządzania stanem gry ---
     class Game {
         constructor() {
             this.player = {
@@ -32,17 +33,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 kickStack: document.querySelector('#kick-stack-area .card-stack'),
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
-                powerTotal: document.getElementById('power-total')
+                powerTotal: document.getElementById('power-total'),
+                choiceModal: {
+                    element: document.getElementById('choice-modal'),
+                    title: document.getElementById('choice-modal-title'),
+                    cardDisplay: document.getElementById('choice-card-display'),
+                    text: document.getElementById('choice-modal-text'),
+                    yesBtn: document.getElementById('choice-yes-btn'),
+                    noBtn: document.getElementById('choice-no-btn'),
+                    waitForChoice: (prompt, card) => {
+                        return new Promise(resolve => {
+                            this.ui.choiceModal.title.textContent = "Podejmij decyzję";
+                            this.ui.choiceModal.text.textContent = prompt;
+                            this.ui.choiceModal.cardDisplay.innerHTML = '';
+                            this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
+                            this.ui.choiceModal.element.classList.add('active');
+                            this.ui.choiceModal.yesBtn.onclick = () => { this.ui.choiceModal.element.classList.remove('active'); resolve('yes'); };
+                            this.ui.choiceModal.noBtn.onclick = () => { this.ui.choiceModal.element.classList.remove('active'); resolve('no'); };
+                        });
+                    }
+                },
+                cardSelectionModal: {
+                    element: document.getElementById('card-selection-modal'),
+                    title: document.getElementById('selection-modal-title'),
+                    cardList: document.getElementById('selection-card-list'),
+                    waitForSelection: (prompt, cardsToChooseFrom) => {
+                        return new Promise(resolve => {
+                            this.ui.cardSelectionModal.title.textContent = prompt;
+                            this.ui.cardSelectionModal.cardList.innerHTML = '';
+                            
+                            const resolvePromise = (card) => {
+                                this.ui.cardSelectionModal.element.classList.remove('active');
+                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); // Clean up listener
+                                resolve(card);
+                            };
+
+                            cardsToChooseFrom.forEach(card => {
+                                const cardElement = this.createCardElement(card, 'selection');
+                                cardElement.addEventListener('click', (event) => {
+                                    event.stopPropagation(); // Prevent the background click from firing
+                                    resolvePromise(card)
+                                });
+                                this.ui.cardSelectionModal.cardList.appendChild(cardElement);
+                            });
+
+                            const closeModalHandler = (e) => {
+                                if (e.target === this.ui.cardSelectionModal.element) {
+                                    resolvePromise(null);
+                                }
+                            };
+                            this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
+
+                            this.ui.cardSelectionModal.element.classList.add('active');
+                        });
+                    }
+                }
             };
         }
-
+        
         shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
         
         resetState() {
             this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0 };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
-            Object.values(this.ui).forEach(zone => { if (zone && zone.id !== 'power-total') zone.innerHTML = ''; });
+            Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
         }
 
         setupNewGame() {
@@ -75,27 +130,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         endTurn() {
             console.log("--- Koniec Tury ---");
-            // 1. Faza Czyszczenia
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
-            this.player.hand = [];
-            this.player.played = [];
-            this.player.power = 0;
+            this.player.hand = []; this.player.played = []; this.player.power = 0;
             console.log("Karty z ręki i zagrane przeniesione do odrzutów. Moc zresetowana.");
-
-            // 2. Uzupełnienie Line-Upu
-            // Najpierw usuwamy placeholdery (null) z tablicy
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
             console.log("Line-Up uzupełniony.");
-
-            // 3. Dobranie Nowej Ręki
-            for(let i = 0; i < 5; i++) {
-                this.drawCard(false); // Dobieramy bez odświeżania widoku po każdej karcie
-            }
+            for(let i = 0; i < 5; i++) { this.drawCard(false); }
             console.log("Dobrano nową rękę.");
-            
-            // 4. Finalne odświeżenie widoku
             this.renderAll();
         }
 
@@ -105,15 +148,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        playCardFromHand(cardId) {
+        shuffleDiscardIntoDeck() {
+            if (this.player.discard.length > 0) {
+                console.log("Tasowanie odrzutów.");
+                this.player.deck = [...this.player.deck, ...this.player.discard];
+                this.player.discard = [];
+                this.shuffle(this.player.deck);
+            }
+        }
+        
+        async executeCardEffects(card) {
+            if (!card.effect_tags || card.effect_tags.length === 0) return;
+            for (const tag of card.effect_tags) {
+                const [effectName, ...params] = tag.split(':');
+                if (effectHandlers[effectName]) {
+                    console.log(`Uruchamianie efektu: ${effectName} z parametrami: ${params}`);
+                    await effectHandlers[effectName](this, params);
+                } else {
+                    console.warn(`Nieznany tag efektu: ${effectName}`);
+                }
+            }
+        }
+
+        async playCardFromHand(cardId) {
             const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) return;
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
             this.player.played.push(cardToPlay);
             this.player.power += cardToPlay.power || 0;
-            console.log(`Zagrnao: ${cardToPlay.name_pl}, +${cardToPlay.power || 0} Mocy. Aktualna moc: ${this.player.power}`);
-            if (cardToPlay.effect_tags.includes("draw:1")) this.drawCard();
-            if (cardToPlay.effect_tags.includes("draw:2")) { this.drawCard(); this.drawCard(); }
+            console.log(`Zagrnao: ${cardToPlay.name_pl}, +${cardToPlay.power || 0} Mocy.`);
+            await this.executeCardEffects(cardToPlay);
             this.renderAll();
         }
 
@@ -133,13 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         drawCard(render = true) {
-            if (this.player.deck.length === 0) {
-                if (this.player.discard.length === 0) { console.log("Brak kart do dobrania."); return; }
-                console.log("Tasowanie odrzutów."); this.player.deck = [...this.player.discard];
-                this.player.discard = []; this.shuffle(this.player.deck);
-            }
-            const drawnCard = this.player.deck.pop();
-            if (drawnCard) this.player.hand.push(drawnCard);
+            if (this.player.deck.length === 0) { this.shuffleDiscardIntoDeck(); }
+            if (this.player.deck.length > 0) {
+                const drawnCard = this.player.deck.pop();
+                if (drawnCard) this.player.hand.push(drawnCard);
+            } else { console.log("Brak kart do dobrania."); }
             if (render) this.renderAll();
         }
 
@@ -169,15 +231,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardDiv = document.createElement('div');
             cardDiv.className = 'card';
             cardDiv.dataset.id = cardData.id;
-            if (location === 'lineup' && this.player.power < cardData.cost) {
-                cardDiv.classList.add('unaffordable');
-            } else {
-                cardDiv.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    this.handleCardClick(cardData, location);
-                });
+            if (location !== 'selection' && location !== 'choice') {
+                if (location === 'lineup' && this.player.power < cardData.cost) {
+                    cardDiv.classList.add('unaffordable');
+                } else {
+                    cardDiv.addEventListener('click', (event) => {
+                        event.stopPropagation();
+                        this.handleCardClick(cardData, location);
+                    });
+                }
             }
-            if (!['deck', 'main-deck'].includes(location)) {
+            if (!['deck', 'main-deck', 'choice', 'selection'].includes(location)) {
                 cardDiv.addEventListener('contextmenu', (event) => {
                     event.preventDefault();
                     cardInspector.style.backgroundImage = `url('${cardData.image_path}')`;
@@ -195,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderAll() {
-            Object.values(this.ui).forEach(zone => { if (zone && zone.id !== 'power-total') zone.innerHTML = ''; });
+            Object.values(this.ui).forEach(zone => { if (zone && zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
             this.player.hand.forEach(card => this.ui.playerHand.appendChild(this.createCardElement(card, 'hand')));
             this.player.played.forEach(card => this.ui.playedCards.appendChild(this.createCardElement(card, 'played')));
             this.lineUp.forEach(card => this.ui.lineUp.appendChild(this.createCardElement(card, 'lineup')));
@@ -211,26 +275,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Inicjalizacja Aplikacji ---
     let game;
     const startScreen = document.getElementById('start-screen');
     const gameScreen = document.getElementById('game-screen');
-    const settingsModal = document.getElementById('settings-modal');
-    const cardIdModal = document.getElementById('card-id-modal');
     const newGameBtn = document.getElementById('new-game-btn');
     const settingsBtn = document.getElementById('settings-btn');
-    const endTurnBtn = document.getElementById('end-turn-btn'); // Nowy przycisk
+    const endTurnBtn = document.getElementById('end-turn-btn');
+    const cardIdModal = document.getElementById('card-id-modal');
     const cardIdSubmitBtn = document.getElementById('card-id-submit');
-    const cardSelectList = document.getElementById('card-select-list');
-    const cardModalTitle = document.getElementById('card-modal-title');
     const debugPanel = document.getElementById('debug-panel');
     let cardIdModalCallback = null;
 
     function showScreen(screenToShow) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); screenToShow.classList.add('active'); }
     function showModal(modal) { modal.classList.add('active'); }
     function hideModal(modal) { modal.classList.remove('active'); }
-
     function populateCardSelect(filterFn = () => true) {
+        const cardSelectList = cardIdModal.querySelector('#card-select-list');
         cardSelectList.innerHTML = '';
         const cardSource = allCards.filter(filterFn).sort((a,b) => a.name_pl.localeCompare(b.name_pl));
         cardSource.forEach(card => {
@@ -244,23 +304,19 @@ document.addEventListener('DOMContentLoaded', () => {
     debugPanel.addEventListener('click', (e) => {
         if (e.target.tagName !== 'BUTTON' || !game) return;
         const action = e.target.dataset.debug;
-        let title = "Wybierz kartę";
         switch (action) {
             case 'draw-card': game.drawCard(); return;
-            case 'add-power': game.player.power++; break;
-            case 'remove-power': if (game.player.power > 0) game.player.power--; break;
+            case 'add-power': game.player.power++; game.renderAll(); return;
+            case 'remove-power': if (game.player.power > 0) game.player.power--; game.renderAll(); return;
             case 'add-card-hand':
-                title = "Dodaj kartę do ręki";
                 populateCardSelect(card => card.type !== 'Super-Hero');
                 cardIdModalCallback = (cardId) => game.addCardById(cardId, 'hand');
                 showModal(cardIdModal); return; 
             case 'add-card-lineup':
-                title = "Dodaj kartę do Line-Up";
                 populateCardSelect(card => card.type !== 'Super-Hero');
                 cardIdModalCallback = (cardId) => game.addCardById(cardId, 'lineup');
                 showModal(cardIdModal); return;
             case 'destroy-card':
-                title = "Zniszcz kartę z ręki";
                 if (game.player.hand.length === 0) { console.log("Nie ma kart w ręce do zniszczenia."); return; }
                 const uniqueHandCards = [...new Map(game.player.hand.map(item => [item['id'], item])).values()];
                 populateCardSelect(card => uniqueHandCards.some(handCard => handCard.id === card.id));
@@ -268,12 +324,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showModal(cardIdModal); return;
             default: return;
         }
-        game.renderAll();
     });
     
     cardIdSubmitBtn.addEventListener('click', () => {
         if (!cardIdModal.classList.contains('active')) return;
-        const selectedId = cardSelectList.value;
+        const selectedId = cardIdModal.querySelector('#card-select-list').value;
         if (selectedId && cardIdModalCallback) {
             cardIdModalCallback(selectedId);
             game.renderAll();
@@ -283,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function main() {
-        document.querySelectorAll('.modal-overlay').forEach(modal => {
+        document.querySelectorAll('.modal-overlay:not(#choice-modal):not(#card-selection-modal)').forEach(modal => {
             modal.querySelector('.close-btn')?.addEventListener('click', () => hideModal(modal));
         });
         newGameBtn.disabled = true;
@@ -296,11 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     newGameBtn.addEventListener('click', () => { showScreen(gameScreen); game = new Game(); game.setupNewGame(); });
-    settingsBtn.addEventListener('click', () => { showModal(settingsModal);});
-    endTurnBtn.addEventListener('click', () => {
-        if (game) {
-            game.endTurn();
-        }
-    });
+    settingsBtn.addEventListener('click', () => { showModal(document.getElementById('settings-modal'));});
+    endTurnBtn.addEventListener('click', () => { if (game) { game.endTurn(); } });
     main();
 });

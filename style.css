@@ -1,0 +1,101 @@
+:root {
+    --board-bg: #334;
+    --zone-bg: #445;
+    --text-color: #f0f0f0;
+    --card-bg: #ccc;
+    --card-border: #999;
+    --accent-color: #f4b400;
+}
+
+body {
+    background-color: var(--board-bg);
+    color: var(--text-color);
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* --- OGÓLNE ZASADY DLA EKRANÓW --- */
+.screen { width: 100vw; height: 100vh; display: none; }
+.screen.active { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+
+/* --- EKRAN STARTOWY --- */
+#start-screen h1 { font-size: 3em; color: var(--accent-color); }
+#start-screen .menu button { font-size: 1.5em; padding: 15px 30px; margin: 10px; cursor: pointer; background-color: var(--zone-bg); color: var(--text-color); border: 2px solid var(--accent-color); border-radius: 5px; }
+#start-screen .menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* --- GŁÓWNY EKRAN GRY --- */
+#game-screen.active {
+    display: grid;
+    grid-template-columns: 1fr 150px;
+    grid-template-rows: 1fr;
+    align-items: start;
+}
+
+/* --- GŁÓWNA PLANSZA (LEWA STRONA) --- */
+.game-board {
+    padding: 10px;
+    display: grid;
+    gap: 10px;
+    height: calc(100vh - 20px);
+    grid-template-columns: 1fr 3fr;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+        "main-deck player-main"
+        "line-up   line-up"
+        "played    played"
+        "hand-cont hand-cont";
+}
+
+#player-main-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* --- SEKCJA RĘKI GRACZA --- */
+#player-hand-container {
+    grid-area: hand-cont;
+    display: grid;
+    grid-template-columns: 150px 1fr 150px; /* Talia | Ręka | Superbohater */
+    gap: 10px;
+    align-items: stretch;
+}
+#player-hand-area { min-height: 150px; }
+.side-hand-zone { justify-content: center; }
+
+
+/* --- PANEL BOCZNY (PRAWA STRONA) --- */
+.side-panel { display: flex; flex-direction: column; gap: 10px; padding: 10px; height: calc(100vh - 20px); }
+.side-panel .info-panel { margin-top: auto; width: 100%; box-sizing: border-box; }
+
+.zone, .sub-zone { background-color: var(--zone-bg); border-radius: 5px; padding: 5px; display: flex; flex-direction: column; overflow: hidden; }
+.zone-title { font-weight: bold; margin-bottom: 5px; text-align: center; color: var(--accent-color); flex-shrink: 0; font-size: 0.8em; }
+
+/* --- PRZYPISANIE STREF DO SIATKI --- */
+#main-deck-area { grid-area: main-deck; }
+#player-main-zone { grid-area: player-main; }
+#line-up-area { grid-area: line-up; }
+#played-cards-area { grid-area: played; }
+
+.card-row, .card-stack { flex-grow: 1; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; min-height: 100px; }
+#line-up-area .card-row { justify-content: space-around; }
+
+/* --- STYLIZACJA KARTY --- */
+.card { width: 90px; height: 126px; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; background-size: cover; background-position: center; background-repeat: no-repeat; flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s; background-color: var(--card-bg); color: #333; display: flex; justify-content: center; align-items: center; text-align: center; font-size: 12px; font-weight: bold; padding: 4px; box-sizing: border-box; }
+.card:hover { transform: scale(1.1); box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10; }
+.card.is-face-down { background-image: url('assets/card_back.png'); background-color: var(--board-bg); color: transparent; }
+.side-stack .card { width: 110px; height: 154px; }
+.side-hand-zone .card { width: 110px; height: 154px; }
+
+/* --- PANEL INFORMACYJNY I MODALE --- */
+.info-panel { background-color: var(--zone-bg); padding: 10px; border-radius: 5px; display: flex; flex-direction: column; align-items: center; }
+.info-panel h2 { margin-top: 0; font-size: 1.2em; }
+.info-panel button { width: 100%; padding: 10px; font-size: 1em; margin-top: auto; }
+#debug-panel { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.7); padding: 5px; border-radius: 5px; z-index: 1000; }
+#debug-panel .debug-header { font-size: 10px; color: #fff; text-align: center; margin-bottom: 5px; }
+#debug-panel button { display: block; font-size: 10px; margin: 2px 0; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center; z-index: 2000; }
+.modal-overlay.active { display: flex; }
+.modal-content { background: var(--zone-bg); padding: 30px; border-radius: 10px; position: relative; min-width: 300px; text-align: center; }
+.modal-content .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; }
+.setting-group { margin-bottom: 15px; text-align: left; }
+.setting-group label { display: block; margin-bottom: 5px; }
+.modal-content select, .modal-content button { width: 100%; padding: 8px; margin-top: 10px; }

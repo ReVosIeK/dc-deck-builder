@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     class Game {
         constructor() {
             this.player = {
-                superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0
+                superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
+                firstPlaysThisTurn: new Set() // Śledzi pierwszy zagrany typ karty w turze
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
@@ -27,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 playerDiscard: document.querySelector('#player-discard-pile-area .card-stack'),
                 playerSuperhero: document.querySelector('#player-superhero-area .card-stack'),
                 playedCards: document.querySelector('#played-cards-area .card-row'),
+                playerLocations: document.querySelector('#player-locations-area .card-row'),
                 destroyedPile: document.querySelector('#destroyed-pile-area .card-stack'),
                 lineUp: document.querySelector('#line-up-area .card-row'),
                 mainDeck: document.querySelector('#main-deck-area .card-stack'),
@@ -61,13 +63,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         return new Promise(resolve => {
                             this.ui.cardSelectionModal.title.textContent = prompt;
                             this.ui.cardSelectionModal.cardList.innerHTML = '';
-                            
                             const resolvePromise = (card) => {
                                 this.ui.cardSelectionModal.element.classList.remove('active');
                                 this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); // Clean up listener
                                 resolve(card);
                             };
-
                             cardsToChooseFrom.forEach(card => {
                                 const cardElement = this.createCardElement(card, 'selection');
                                 cardElement.addEventListener('click', (event) => {
@@ -76,14 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 });
                                 this.ui.cardSelectionModal.cardList.appendChild(cardElement);
                             });
-
                             const closeModalHandler = (e) => {
                                 if (e.target === this.ui.cardSelectionModal.element) {
                                     resolvePromise(null);
                                 }
                             };
                             this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
-
                             this.ui.cardSelectionModal.element.classList.add('active');
                         });
                     }
@@ -94,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
         
         resetState() {
-            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0 };
+            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set() };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
             Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
@@ -133,6 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
             this.player.hand = []; this.player.played = []; this.player.power = 0;
+            this.player.firstPlaysThisTurn.clear(); // Czyścimy śledzenie na koniec tury
             console.log("Karty z ręki i zagrane przeniesione do odrzutów. Moc zresetowana.");
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
@@ -159,25 +158,63 @@ document.addEventListener('DOMContentLoaded', () => {
         
         async executeCardEffects(card) {
             if (!card.effect_tags || card.effect_tags.length === 0) return;
+            // Używamy pętli for...of aby poprawnie obsłużyć 'await'
             for (const tag of card.effect_tags) {
                 const [effectName, ...params] = tag.split(':');
                 if (effectHandlers[effectName]) {
                     console.log(`Uruchamianie efektu: ${effectName} z parametrami: ${params}`);
-                    await effectHandlers[effectName](this, params);
+                    await effectHandlers[effectName](this, params); // Czekamy na zakończenie efektu
                 } else {
                     console.warn(`Nieznany tag efektu: ${effectName}`);
                 }
             }
         }
 
+        checkOngoingEffects(playedCard) {
+            const playedType = playedCard.type.toLowerCase();
+            // Sprawdź, czy karta tego typu była już zagrana w tej turze
+            if (this.player.firstPlaysThisTurn.has(playedType)) {
+                return; // Jeśli tak, nie rób nic
+            }
+
+            // Jeśli nie, sprawdź czy jakaś lokacja ma na to trigger
+            this.player.locations.forEach(location => {
+                location.effect_tags.forEach(tag => {
+                    const match = tag.match(/on_play_first_(.*)_per_turn_draw_1/);
+                    if (match) {
+                        const triggerType = match[1].toLowerCase();
+                        if (triggerType === playedType) {
+                            console.log(`Efekt Lokacji (${location.name_pl}): Dobranie karty za zagranie pierwszego ${playedType}.`);
+                            this.drawCard(false); // Dobierz kartę bez renderowania
+                        }
+                    }
+                });
+            });
+
+            // Oznacz ten typ karty jako zagrany w tej turze
+            this.player.firstPlaysThisTurn.add(playedType);
+        }
+
         async playCardFromHand(cardId) {
             const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) return;
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
-            this.player.played.push(cardToPlay);
+            
+            // Inaczej traktujemy lokacje
+            if (cardToPlay.type === 'Location') {
+                this.player.locations.push(cardToPlay);
+                console.log(`Wyłożono lokację: ${cardToPlay.name_pl}`);
+            } else {
+                this.player.played.push(cardToPlay);
+                // Sprawdzamy efekty lokacji tylko dla kart nie-lokacji
+                this.checkOngoingEffects(cardToPlay);
+            }
+
             this.player.power += cardToPlay.power || 0;
             console.log(`Zagrnao: ${cardToPlay.name_pl}, +${cardToPlay.power || 0} Mocy.`);
+            
             await this.executeCardEffects(cardToPlay);
+
             this.renderAll();
         }
 
@@ -272,6 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.values(this.ui).forEach(zone => { if (zone && zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
             this.player.hand.forEach(card => this.ui.playerHand.appendChild(this.createCardElement(card, 'hand')));
             this.player.played.forEach(card => this.ui.playedCards.appendChild(this.createCardElement(card, 'played')));
+            this.player.locations.forEach(card => this.ui.playerLocations.appendChild(this.createCardElement(card, 'location')));
             this.lineUp.forEach(card => this.ui.lineUp.appendChild(this.createCardElement(card, 'lineup')));
             if (this.player.deck.length > 0) this.ui.playerDeck.appendChild(this.createCardElement(this.player.deck[0], 'deck'));
             if (this.player.discard.length > 0) this.ui.playerDiscard.appendChild(this.createCardElement(this.player.discard[this.player.discard.length - 1], 'discard'));

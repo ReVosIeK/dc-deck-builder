@@ -1,13 +1,12 @@
 // script.js
 
 import { effectHandlers } from './effects.js';
-import { translations } from './translations.js'; // Importujemy nasze tłumaczenia
+import { translations } from './translations.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Bazy Danych ---
     let allCards = [];
     let deckComposition = [];
-    let currentLanguage = 'pl'; // Domyślny język
+    let currentLanguage = 'pl';
 
     const cardInspector = document.getElementById('card-inspector');
     document.addEventListener('click', () => {
@@ -16,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // NOWA FUNKCJA DO ZMIANY JĘZYKA
     function setLanguage(lang) {
         currentLanguage = lang;
         document.querySelectorAll('[data-translate-key]').forEach(element => {
@@ -25,8 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 element.textContent = translations[lang][key];
             }
         });
-
-        // Musimy też zaktualizować placeholdery, jeśli są widoczne
         document.querySelectorAll('.card-placeholder').forEach(el => {
             el.textContent = translations[lang].emptySlot;
         });
@@ -36,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor() {
             this.player = {
                 superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
-                firstPlaysThisTurn: new Set() // Śledzi pierwszy zagrany typ karty w turze
+                firstPlaysThisTurn: new Set()
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
@@ -55,59 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
                 powerTotal: document.getElementById('power-total'),
-                choiceModal: {
-                    element: document.getElementById('choice-modal'),
-                    title: document.getElementById('choice-modal-title'),
-                    cardDisplay: document.getElementById('choice-card-display'),
-                    text: document.getElementById('choice-modal-text'),
-                    yesBtn: document.getElementById('choice-yes-btn'),
-                    noBtn: document.getElementById('choice-no-btn'),
-                    waitForChoice: (prompt, card) => {
-                        return new Promise(resolve => {
-                            this.ui.choiceModal.text.textContent = prompt;
-                            this.ui.choiceModal.cardDisplay.innerHTML = '';
-                            this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
-                            this.ui.choiceModal.element.classList.add('active');
-                            const resolvePromise = (choice) => {
-                                this.ui.choiceModal.element.classList.remove('active');
-                                resolve(choice);
-                            };
-                            this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
-                            this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
-                        });
-                    }
-                },
-                cardSelectionModal: {
-                    element: document.getElementById('card-selection-modal'),
-                    title: document.getElementById('selection-modal-title'),
-                    cardList: document.getElementById('selection-card-list'),
-                    waitForSelection: (prompt, cardsToChooseFrom) => {
-                        return new Promise(resolve => {
-                            this.ui.cardSelectionModal.title.textContent = prompt;
-                            this.ui.cardSelectionModal.cardList.innerHTML = '';
-                            const resolvePromise = (card) => {
-                                this.ui.cardSelectionModal.element.classList.remove('active');
-                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler);
-                                resolve(card);
-                            };
-                            cardsToChooseFrom.forEach(card => {
-                                const cardElement = this.createCardElement(card, 'selection');
-                                cardElement.addEventListener('click', (event) => {
-                                    event.stopPropagation();
-                                    resolvePromise(card)
-                                });
-                                this.ui.cardSelectionModal.cardList.appendChild(cardElement);
-                            });
-                            const closeModalHandler = (e) => {
-                                if (e.target === this.ui.cardSelectionModal.element) {
-                                    resolvePromise(null);
-                                }
-                            };
-                            this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
-                            this.ui.cardSelectionModal.element.classList.add('active');
-                        });
-                    }
-                }
+                choiceModal: { element: document.getElementById('choice-modal'), title: document.getElementById('choice-modal-title'), cardDisplay: document.getElementById('choice-card-display'), text: document.getElementById('choice-modal-text'), yesBtn: document.getElementById('choice-yes-btn'), noBtn: document.getElementById('choice-no-btn'), waitForChoice: (prompt, card) => { return new Promise(resolve => { this.ui.choiceModal.text.textContent = prompt; this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.element.classList.add('active'); const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); }; this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true }); this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true }); }); } },
+                cardSelectionModal: { element: document.getElementById('card-selection-modal'), title: document.getElementById('selection-modal-title'), cardList: document.getElementById('selection-card-list'), waitForSelection: (prompt, cardsToChooseFrom) => { return new Promise(resolve => { this.ui.cardSelectionModal.title.textContent = prompt; this.ui.cardSelectionModal.cardList.innerHTML = ''; const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); }; cardsToChooseFrom.forEach(card => { const cardElement = this.createCardElement(card, 'selection'); cardElement.addEventListener('click', (event) => { event.stopPropagation(); resolvePromise(card) }); this.ui.cardSelectionModal.cardList.appendChild(cardElement); }); const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) { resolvePromise(null); } }; this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler); this.ui.cardSelectionModal.element.classList.add('active'); }); } }
             };
         }
         
@@ -139,12 +84,46 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < 16; i++) this.kickStack.push(kickCard);
             for (let i = 0; i < 20; i++) this.weaknessStack.push(weaknessCard);
             const svCards = allCards.filter(c => c.type === 'Super-Villain' && c.id !== 'ras_al_ghul');
-            this.shuffle(svCards); this.superVillainStack = svCards.slice(0, 7);
+            this.shuffle(svCards); 
+            this.superVillainStack = svCards.slice(0, 7);
             this.superVillainStack.push(allCards.find(c => c.id === 'ras_al_ghul'));
-            this.superVillainStack.reverse();
             this.refillLineUp();
             for(let i = 0; i < 5; i++) { this.drawCard(false); }
             this.renderAll();
+        }
+
+        async defeatSuperVillain() {
+            if (this.superVillainStack.length === 0) return;
+            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
+
+            if (this.player.power >= superVillain.cost) {
+                console.log(`Pokonujesz ${superVillain.name_pl}!`);
+                this.player.power -= superVillain.cost;
+
+                const defeatedSV = this.superVillainStack.pop();
+                this.player.discard.push(defeatedSV);
+
+                if (this.superVillainStack.length > 0) {
+                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
+                    console.log(`Pojawia się nowy Super-Złoczyńca: ${nextSuperVillain.name_pl}!`);
+                    
+                    if (nextSuperVillain.effect_tags) {
+                        for (const tag of nextSuperVillain.effect_tags) {
+                            if (tag.startsWith('first_appearance_attack')) {
+                                const [effectName, ...params] = tag.split(':');
+                                if (effectHandlers[effectName]) {
+                                    await effectHandlers[effectName](this, params);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    console.log("Pokonano ostatniego Super-Złoczyńcę!");
+                }
+                this.renderAll();
+            } else {
+                console.log(`Za mało mocy, by pokonać ${superVillain.name_pl}. Wymagane: ${superVillain.cost}, Masz: ${this.player.power}`);
+            }
         }
 
         endTurn() {
@@ -152,10 +131,37 @@ document.addEventListener('DOMContentLoaded', () => {
             this.player.discard.push(...this.player.played);
             this.player.hand = []; this.player.played = []; this.player.power = 0;
             this.player.firstPlaysThisTurn.clear();
+            
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
+            
+            if (this.superVillainStack.length === 0) {
+                this.endGame("Pokonano ostatniego Super-Złoczyńcę!");
+                return;
+            }
+            if (this.lineUp.length < 5 && this.mainDeck.length === 0) {
+                this.endGame("Nie można uzupełnić Line-Upu!");
+                return;
+            }
+
             for(let i = 0; i < 5; i++) { this.drawCard(false); }
             this.renderAll();
+        }
+
+        calculateVictoryPoints() {
+            const allPlayerCards = [
+                ...this.player.deck, ...this.player.hand,
+                ...this.player.discard, ...this.player.played,
+                ...this.player.locations
+            ];
+            return allPlayerCards.reduce((total, card) => total + (card.vp || 0), 0);
+        }
+
+        endGame(reason) {
+            console.log("--- KONIEC GRY ---");
+            const finalScore = this.calculateVictoryPoints();
+            console.log(`Ostateczny wynik: ${finalScore} punktów zwycięstwa.`);
+            alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
         }
 
         refillLineUp() {
@@ -271,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cardDiv.dataset.id = cardData.id;
             const cardName = cardData[`name_${currentLanguage}`] || cardData.name_en;
             if (location !== 'selection' && location !== 'choice') {
-                if (location === 'lineup' && this.player.power < cardData.cost) {
+                if ((location === 'lineup' || location === 'super-villain') && this.player.power < cardData.cost) {
                     cardDiv.classList.add('unaffordable');
                 } else {
                     cardDiv.addEventListener('click', (event) => {
@@ -299,6 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleCardClick(cardData, location) {
             if (location === 'hand') { this.playCardFromHand(cardData.id); }
             else if (location === 'lineup') { this.buyCardFromLineUp(cardData.id); }
+            else if (location === 'super-villain') { this.defeatSuperVillain(); }
         }
 
         renderAll() {
@@ -314,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.mainDeck.length > 0) this.ui.mainDeck.appendChild(this.createCardElement(this.mainDeck[0], 'main-deck'));
             if (this.kickStack.length > 0) this.ui.kickStack.appendChild(this.createCardElement(this.kickStack[0], 'kick'));
             if (this.weaknessStack.length > 0) this.ui.weaknessStack.appendChild(this.createCardElement(this.weaknessStack[0], 'weakness'));
-            if (this.superVillainStack.length > 0) this.ui.superVillainStack.appendChild(this.createCardElement(this.superVillainStack[0], 'super-villain'));
+            if (this.superVillainStack.length > 0) this.ui.superVillainStack.appendChild(this.createCardElement(this.superVillainStack[this.superVillainStack.length - 1], 'super-villain'));
             this.ui.powerTotal.textContent = this.player.power;
         }
     }
@@ -403,6 +410,6 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsBtn.addEventListener('click', () => { showModal(document.getElementById('settings-modal'));});
     endTurnBtn.addEventListener('click', () => { if (game) { game.endTurn(); } });
     
-    setLanguage('pl');
+    setLanguage('en');
     main();
 });

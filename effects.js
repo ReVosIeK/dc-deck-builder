@@ -60,60 +60,30 @@ export const effectHandlers = {
             let sourcePile;
             if (sourceZone === 'discard') sourcePile = game.player.discard;
 
-            if (!sourcePile || sourcePile.length === 0) {
-                console.log(`Strefa źródłowa (${sourceZone}) jest pusta.`);
-                return;
-            }
-            
+            if (!sourcePile || sourcePile.length === 0) { return; }
             const validCards = sourcePile.filter(card => card.type.toLowerCase() === cardType.toLowerCase());
+            if (validCards.length === 0) { return; }
 
-            if (validCards.length === 0) {
-                console.log(`Nie znaleziono kart typu '${cardType}' w strefie '${sourceZone}'.`);
-                return;
-            }
-
-            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
-                `Wybierz kartę typu '${cardType}', aby przenieść ją do '${destZone}':`,
-                validCards
-            );
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(`Wybierz kartę typu '${cardType}', aby przenieść ją do '${destZone}':`, validCards);
 
             if (chosenCard) {
                 const cardIndex = sourcePile.findIndex(card => card === chosenCard);
                 if (cardIndex > -1) sourcePile.splice(cardIndex, 1);
                 
                 if (destZone === 'hand') game.player.hand.push(chosenCard);
-                console.log(`Przeniesiono ${chosenCard.name_pl} z ${sourceZone} do ${destZone}.`);
-            } else {
-                console.log("Anulowano wybór karty.");
             }
         }
-        // NOWA LOGIKA DLA "X-RAY VISION"
         else if (effectString.includes('each_opponent_reveals_deck_top_1')) {
-            if (game.mainDeck.length === 0) {
-                console.log("Talia główna jest pusta.");
-                return;
-            }
+            if (game.mainDeck.length === 0) { return; }
             const topCard = game.mainDeck[game.mainDeck.length - 1];
 
-            if (topCard.type === 'Location') {
-                console.log(`Odkryto Lokację (${topCard.name_pl}), nie można jej zagrać.`);
-                // Można by tu dodać pokazanie karty graczowi, ale na razie upraszczamy
-                return;
-            }
+            if (topCard.type === 'Location') { return; }
 
-            const choice = await game.ui.choiceModal.waitForChoice(
-                `Możesz zagrać tę kartę z talii głównej:`,
-                topCard
-            );
+            const choice = await game.ui.choiceModal.waitForChoice(`Możesz zagrać tę kartę z talii głównej:`, topCard);
 
             if (choice === 'yes') {
-                console.log(`Zagrywasz tymczasowo: ${topCard.name_pl}`);
-                // Symulujemy zagranie karty: dodajemy jej moc i odpalamy efekty
                 game.player.power += topCard.power || 0;
                 await game.executeCardEffects(topCard);
-                console.log(`Efekt karty ${topCard.name_pl} zakończony. Karta wraca na wierzch talii głównej.`);
-            } else {
-                console.log(`Zdecydowano nie zagrywać karty ${topCard.name_pl}.`);
             }
         }
         else {
@@ -123,12 +93,35 @@ export const effectHandlers = {
     
     attack: (game, params) => {
         const attackString = params.join(':');
-
         if (attackString === 'each_opponent_gains_weakness') {
             console.log("Efekt Ataku: Przeciwnik otrzymuje Słabość.");
             game.gainWeakness();
         } else {
             console.warn(`Nieznany typ ataku: ${attackString}`);
+        }
+    },
+
+    /**
+     * NOWY EFEKT
+     * Obsługuje ataki z Pierwszego Pojawienia Super-Złoczyńców.
+     * @param {Game} game - Instancja całej gry.
+     * @param {string[]} params - Parametry ataku.
+     */
+    first_appearance_attack: (game, params) => {
+        const attackString = params.join(':');
+        console.log(`Nadchodzi nowy Super-Złoczyńca! Atak Pierwszego Pojawienia: ${attackString}`);
+
+        // Przykładowy, prosty atak, np. z Lexa Luthora
+        if (attackString.includes('each_player_gains_weakness_count_equal_to_villains_in_lineup')) {
+            const villainCount = game.lineUp.filter(card => card && card.type === 'Villain').length;
+            console.log(`Liczba Złoczyńców w Line-Up: ${villainCount}. Otrzymujesz tyle Słabości.`);
+            for (let i = 0; i < villainCount; i++) {
+                game.gainWeakness();
+            }
+        }
+        // W przyszłości dodamy 'else if' dla innych ataków
+        else {
+            console.warn(`Niezaimplementowany Atak Pierwszego Pojawienia: ${attackString}`);
         }
     }
 };

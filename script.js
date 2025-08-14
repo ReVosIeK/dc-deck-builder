@@ -1,11 +1,14 @@
 // script.js
 
 import { effectHandlers } from './effects.js';
+import { translations } from './translations.js'; // Importujemy nasze tłumaczenia
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Bazy Danych ---
     let allCards = [];
     let deckComposition = [];
-    
+    let currentLanguage = 'pl'; // Domyślny język
+
     const cardInspector = document.getElementById('card-inspector');
     document.addEventListener('click', () => {
         if (cardInspector.classList.contains('visible')) {
@@ -13,11 +16,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // NOWA FUNKCJA DO ZMIANY JĘZYKA
+    function setLanguage(lang) {
+        currentLanguage = lang;
+        document.querySelectorAll('[data-translate-key]').forEach(element => {
+            const key = element.dataset.translateKey;
+            if (translations[lang][key]) {
+                element.textContent = translations[lang][key];
+            }
+        });
+
+        // Musimy też zaktualizować placeholdery, jeśli są widoczne
+        document.querySelectorAll('.card-placeholder').forEach(el => {
+            el.textContent = translations[lang].emptySlot;
+        });
+    }
+
     class Game {
         constructor() {
             this.player = {
                 superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
-                firstPlaysThisTurn: new Set()
+                firstPlaysThisTurn: new Set() // Śledzi pierwszy zagrany typ karty w turze
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
@@ -43,21 +62,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     text: document.getElementById('choice-modal-text'),
                     yesBtn: document.getElementById('choice-yes-btn'),
                     noBtn: document.getElementById('choice-no-btn'),
-                    // ZAKTUALIZOWANA FUNKCJA
                     waitForChoice: (prompt, card) => {
                         return new Promise(resolve => {
-                            this.ui.choiceModal.title.textContent = "Podejmij decyzję";
                             this.ui.choiceModal.text.textContent = prompt;
                             this.ui.choiceModal.cardDisplay.innerHTML = '';
                             this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
-                            
                             this.ui.choiceModal.element.classList.add('active');
-
                             const resolvePromise = (choice) => {
                                 this.ui.choiceModal.element.classList.remove('active');
                                 resolve(choice);
                             };
-
                             this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
                             this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
                         });
@@ -71,13 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         return new Promise(resolve => {
                             this.ui.cardSelectionModal.title.textContent = prompt;
                             this.ui.cardSelectionModal.cardList.innerHTML = '';
-                            
                             const resolvePromise = (card) => {
                                 this.ui.cardSelectionModal.element.classList.remove('active');
                                 this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler);
                                 resolve(card);
                             };
-
                             cardsToChooseFrom.forEach(card => {
                                 const cardElement = this.createCardElement(card, 'selection');
                                 cardElement.addEventListener('click', (event) => {
@@ -86,14 +98,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 });
                                 this.ui.cardSelectionModal.cardList.appendChild(cardElement);
                             });
-
                             const closeModalHandler = (e) => {
                                 if (e.target === this.ui.cardSelectionModal.element) {
                                     resolvePromise(null);
                                 }
                             };
                             this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
-
                             this.ui.cardSelectionModal.element.classList.add('active');
                         });
                     }
@@ -111,10 +121,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setupNewGame() {
-            this.resetState(); console.log("Rozpoczynanie setupu nowej gry...");
+            this.resetState();
             const superheroes = allCards.filter(c => c.type === 'Super-Hero');
             this.player.superhero = superheroes[Math.floor(Math.random() * superheroes.length)];
-            console.log(`Wybrano Superbohatera: ${this.player.superhero.name_pl}`);
             for (let i = 0; i < 7; i++) this.player.deck.push(allCards.find(c => c.id === 'punch'));
             for (let i = 0; i < 3; i++) this.player.deck.push(allCards.find(c => c.id === 'vulnerability'));
             this.shuffle(this.player.deck);
@@ -124,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (let i = 0; i < item.count; i++) this.mainDeck.push(cardInfo);
                 }
             });
-            this.shuffle(this.mainDeck); console.log(`Talia główna stworzona: ${this.mainDeck.length} kart.`);
+            this.shuffle(this.mainDeck);
             const kickCard = allCards.find(c => c.id === 'kick');
             const weaknessCard = allCards.find(c => c.id === 'weakness');
             for (let i = 0; i < 16; i++) this.kickStack.push(kickCard);
@@ -132,24 +141,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const svCards = allCards.filter(c => c.type === 'Super-Villain' && c.id !== 'ras_al_ghul');
             this.shuffle(svCards); this.superVillainStack = svCards.slice(0, 7);
             this.superVillainStack.push(allCards.find(c => c.id === 'ras_al_ghul'));
-            this.superVillainStack.reverse(); console.log(`Stos Super-złoczyńców gotowy: ${this.superVillainStack.length} kart.`);
+            this.superVillainStack.reverse();
             this.refillLineUp();
             for(let i = 0; i < 5; i++) { this.drawCard(false); }
-            this.renderAll(); console.log("Setup zakończony, plansza wyrenderowana.");
+            this.renderAll();
         }
 
         endTurn() {
-            console.log("--- Koniec Tury ---");
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
             this.player.hand = []; this.player.played = []; this.player.power = 0;
             this.player.firstPlaysThisTurn.clear();
-            console.log("Karty z ręki i zagrane przeniesione do odrzutów. Moc zresetowana.");
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
-            console.log("Line-Up uzupełniony.");
             for(let i = 0; i < 5; i++) { this.drawCard(false); }
-            console.log("Dobrano nową rękę.");
             this.renderAll();
         }
 
@@ -161,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         shuffleDiscardIntoDeck() {
             if (this.player.discard.length > 0) {
-                console.log("Tasowanie odrzutów.");
                 this.player.deck = [...this.player.deck, ...this.player.discard];
                 this.player.discard = [];
                 this.shuffle(this.player.deck);
@@ -173,7 +177,6 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const tag of card.effect_tags) {
                 const [effectName, ...params] = tag.split(':');
                 if (effectHandlers[effectName]) {
-                    console.log(`Uruchamianie efektu: ${effectName} z parametrami: ${params}`);
                     await effectHandlers[effectName](this, params);
                 } else {
                     console.warn(`Nieznany tag efektu: ${effectName}`);
@@ -190,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (match) {
                         const triggerType = match[1].toLowerCase();
                         if (triggerType === playedType) {
-                            console.log(`Efekt Lokacji (${location.name_pl}): Dobranie karty za zagranie pierwszego ${playedType}.`);
                             this.drawCard(false);
                         }
                     }
@@ -205,13 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
             if (cardToPlay.type === 'Location') {
                 this.player.locations.push(cardToPlay);
-                console.log(`Wyłożono lokację: ${cardToPlay.name_pl}`);
             } else {
                 this.player.played.push(cardToPlay);
                 this.checkOngoingEffects(cardToPlay);
             }
             this.player.power += cardToPlay.power || 0;
-            console.log(`Zagrnao: ${cardToPlay.name_pl}, +${cardToPlay.power || 0} Mocy.`);
             await this.executeCardEffects(cardToPlay);
             this.renderAll();
         }
@@ -224,10 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.player.power -= cardToBuy.cost;
                 this.player.discard.push(cardToBuy);
                 this.lineUp[cardIndex] = null;
-                console.log(`Kupiono: ${cardToBuy.name_pl} za ${cardToBuy.cost}. Pozostało mocy: ${this.player.power}`);
                 this.renderAll();
-            } else {
-                console.log(`Za mało mocy by kupić ${cardToBuy.name_pl}. Wymagane: ${cardToBuy.cost}, Masz: ${this.player.power}`);
             }
         }
         
@@ -236,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.player.deck.length > 0) {
                 const drawnCard = this.player.deck.pop();
                 if (drawnCard) this.player.hand.push(drawnCard);
-            } else { console.log("Brak kart do dobrania."); }
+            }
             if (render) this.renderAll();
         }
 
@@ -244,17 +241,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.weaknessStack.length > 0) {
                 const weaknessCard = this.weaknessStack.pop();
                 this.player.discard.push(weaknessCard);
-                console.log("Gracz otrzymał Słabość.");
-            } else {
-                console.log("Stos Słabości jest pusty.");
             }
         }
 
         addCardById(cardId, destination) {
             const card = allCards.find(c => c.id === cardId);
-            if (!card) { console.error(`Nie znaleziono karty o ID: ${cardId}`); return; }
-            if (destination === 'hand') { this.player.hand.push(card); console.log(`Dodano ${card.name_pl} do ręki.`); }
-            else if (destination === 'lineup') { this.lineUp.push(card); console.log(`Dodano ${card.name_pl} do Line-Up.`); }
+            if (!card) { return; }
+            if (destination === 'hand') { this.player.hand.push(card); }
+            else if (destination === 'lineup') { this.lineUp.push(card); }
         }
 
         destroyCardFromHand(cardId) {
@@ -262,20 +256,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (cardIndex > -1) {
                 const [destroyedCard] = this.player.hand.splice(cardIndex, 1);
                 this.destroyedPile.push(destroyedCard);
-                console.log(`Zniszczono ${destroyedCard.name_pl} z ręki.`);
-            } else { console.error(`Nie znaleziono karty ${cardId} w ręce.`); }
+            }
         }
         
         createCardElement(cardData, location) {
             if (!cardData) {
                 const placeholder = document.createElement('div');
                 placeholder.className = 'card-placeholder';
-                placeholder.textContent = 'Pusty slot';
+                placeholder.textContent = translations[currentLanguage].emptySlot;
                 return placeholder;
             }
             const cardDiv = document.createElement('div');
             cardDiv.className = 'card';
             cardDiv.dataset.id = cardData.id;
+            const cardName = cardData[`name_${currentLanguage}`] || cardData.name_en;
             if (location !== 'selection' && location !== 'choice') {
                 if (location === 'lineup' && this.player.power < cardData.cost) {
                     cardDiv.classList.add('unaffordable');
@@ -293,8 +287,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     cardInspector.classList.add('visible');
                 });
             }
-            if (['deck', 'main-deck'].includes(location)) { cardDiv.classList.add('is-face-down');
-            } else { cardDiv.style.backgroundImage = `url('${cardData.image_path}')`; cardDiv.textContent = cardData.name_pl; }
+            if (['deck', 'main-deck'].includes(location)) { 
+                cardDiv.classList.add('is-face-down');
+            } else { 
+                cardDiv.style.backgroundImage = `url('${cardData.image_path}')`; 
+                cardDiv.textContent = cardName;
+            }
             return cardDiv;
         }
         
@@ -330,19 +328,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardIdModal = document.getElementById('card-id-modal');
     const cardIdSubmitBtn = document.getElementById('card-id-submit');
     const debugPanel = document.getElementById('debug-panel');
+    const languageSelect = document.getElementById('language-select');
     let cardIdModalCallback = null;
 
     function showScreen(screenToShow) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); screenToShow.classList.add('active'); }
     function showModal(modal) { modal.classList.add('active'); }
     function hideModal(modal) { modal.classList.remove('active'); }
+    
     function populateCardSelect(filterFn = () => true) {
         const cardSelectList = cardIdModal.querySelector('#card-select-list');
         cardSelectList.innerHTML = '';
-        const cardSource = allCards.filter(filterFn).sort((a,b) => a.name_pl.localeCompare(b.name_pl));
+        const cardSource = allCards.filter(filterFn).sort((a, b) => (a[`name_${currentLanguage}`] || a.name_en).localeCompare(b[`name_${currentLanguage}`] || b.name_en));
         cardSource.forEach(card => {
             const option = document.createElement('option');
             option.value = card.id;
-            option.textContent = `${card.name_pl} [${card.type}]`;
+            option.textContent = `${card[`name_${currentLanguage}`] || card.name_en} [${card.type}]`;
             cardSelectList.appendChild(option);
         });
     }
@@ -363,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cardIdModalCallback = (cardId) => game.addCardById(cardId, 'lineup');
                 showModal(cardIdModal); return;
             case 'destroy-card':
-                if (game.player.hand.length === 0) { console.log("Nie ma kart w ręce do zniszczenia."); return; }
+                if (game.player.hand.length === 0) { return; }
                 const uniqueHandCards = [...new Map(game.player.hand.map(item => [item['id'], item])).values()];
                 populateCardSelect(card => uniqueHandCards.some(handCard => handCard.id === card.id));
                 cardIdModalCallback = (cardId) => game.destroyCardFromHand(cardId);
@@ -383,6 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
         cardIdModalCallback = null;
     });
 
+    languageSelect.addEventListener('change', (e) => {
+        setLanguage(e.target.value);
+    });
+
     async function main() {
         document.querySelectorAll('.modal-overlay:not(#choice-modal):not(#card-selection-modal)').forEach(modal => {
             modal.querySelector('.close-btn')?.addEventListener('click', () => hideModal(modal));
@@ -391,7 +395,6 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [cardsRes, compoRes] = await Promise.all([fetch('cards.json'), fetch('deck_composition.json')]);
             allCards = await cardsRes.json(); deckComposition = await compoRes.json();
-            console.log("Pomyślnie załadowano dane gry.");
             newGameBtn.disabled = false;
         } catch (error) { console.error("Błąd ładowania danych gry:", error); }
     }
@@ -399,5 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
     newGameBtn.addEventListener('click', () => { showScreen(gameScreen); game = new Game(); game.setupNewGame(); });
     settingsBtn.addEventListener('click', () => { showModal(document.getElementById('settings-modal'));});
     endTurnBtn.addEventListener('click', () => { if (game) { game.endTurn(); } });
+    
+    setLanguage('pl');
     main();
 });

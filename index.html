@@ -11,51 +11,51 @@
     <div id="start-screen" class="screen active">
         <h1>DC Deck-Building Game</h1>
         <div class="menu">
-            <button id="new-game-btn">Nowa Gra</button>
-            <button id="continue-game-btn" disabled>Kontynuuj Grę</button>
-            <button id="settings-btn">Ustawienia</button>
+            <button id="new-game-btn" data-translate-key="newGame">Nowa Gra</button>
+            <button id="continue-game-btn" data-translate-key="continueGame" disabled>Kontynuuj Grę</button>
+            <button id="settings-btn" data-translate-key="settings">Ustawienia</button>
         </div>
     </div>
 
     <div id="game-screen" class="screen">
         <div class="game-board">
             <div id="main-deck-area" class="zone">
-                <div class="zone-title">MAIN DECK</div>
+                <div class="zone-title" data-translate-key="mainDeck">TALIA GŁÓWNA</div>
                 <div class="card-stack"></div>
             </div>
             
             <div id="player-main-zone">
                 <div id="player-discard-pile-area" class="sub-zone">
-                    <div class="zone-title">DISCARD</div>
+                    <div class="zone-title" data-translate-key="discard">ODRZUTY</div>
                     <div class="card-stack"></div>
                 </div>
                  <div id="player-locations-area" class="sub-zone">
-                    <div class="zone-title">LOCATIONS</div>
+                    <div class="zone-title" data-translate-key="locations">LOKACJE</div>
                     <div class="card-row"></div>
                 </div>
             </div>
 
             <div id="line-up-area" class="zone">
-                <div class="zone-title">LINE-UP</div>
+                <div class="zone-title" data-translate-key="lineUp">LINE-UP</div>
                 <div class="card-row"></div>
             </div>
 
             <div id="played-cards-area" class="zone">
-                <div class="zone-title">PLAYED CARDS</div>
+                <div class="zone-title" data-translate-key="playedCards">ZAGRANE KARTY</div>
                  <div class="card-row"></div>
             </div>
             
             <div id="player-hand-container">
                 <div id="player-deck-area" class="zone side-hand-zone">
-                    <div class="zone-title">YOUR DECK</div>
+                    <div class="zone-title" data-translate-key="yourDeck">TWOJA TALIA</div>
                     <div class="card-stack"></div>
                 </div>
                 <div id="player-hand-area" class="zone">
-                    <div class="zone-title">YOUR HAND</div>
+                    <div class="zone-title" data-translate-key="yourHand">TWOJA RĘKA</div>
                     <div class="card-row"></div>
                 </div>
                 <div id="player-superhero-area" class="zone side-hand-zone">
-                    <div class="zone-title">SUPERHERO</div>
+                    <div class="zone-title" data-translate-key="superhero">SUPERBOHATER</div>
                     <div class="card-stack"></div>
                 </div>
             </div>
@@ -63,68 +63,85 @@
 
         <div class="side-panel">
             <div id="super-villain-stack-area" class="zone side-stack">
-                <div class="zone-title">SUPER-VILLAIN</div>
+                <div class="zone-title" data-translate-key="superVillain">SUPER-ZŁOCZYŃCA</div>
                 <div class="card-stack"></div>
             </div>
             <div id="kick-stack-area" class="zone side-stack">
-                <div class="zone-title">KICK</div>
+                <div class="zone-title" data-translate-key="kick">KOPNIAK</div>
                 <div class="card-stack"></div>
             </div>
             <div id="weakness-stack-area" class="zone side-stack">
-                <div class="zone-title">WEAKNESS</div>
+                <div class="zone-title" data-translate-key="weakness">SŁABOŚĆ</div>
                 <div class="card-stack"></div>
             </div>
             <div id="destroyed-pile-area" class="zone side-stack">
-                <div class="zone-title">DESTROYED</div>
+                <div class="zone-title" data-translate-key="destroyed">ZNISZCZONE</div>
                 <div class="card-stack"></div>
             </div>
             
             <div class="info-panel">
-                <h2>Tura Gracza</h2>
+                <h2 data-translate-key="playerTurn">Tura Gracza</h2>
                 <div class="stats">
-                    <p>Power: <span id="power-total">0</span></p>
+                    <p><span data-translate-key="power">Moc</span>: <span id="power-total">0</span></p>
                 </div>
-                <button id="end-turn-btn">End Turn</button>
+                <button id="end-turn-btn" data-translate-key="endTurn">Zakończ Turę</button>
             </div>
         </div>
     </div>
 
     <div id="debug-panel">
-        <div class="debug-header">DEBUG PANEL</div>
-        <button data-debug="draw-card">Dobierz kartę</button>
-        <button data-debug="add-power">Dodaj Moc (+1)</button>
-        <button data-debug="remove-power">Usuń Moc (-1)</button>
-        <button data-debug="add-card-hand">Dodaj kartę do ręki</button>
-        <button data-debug="destroy-card">Zniszcz kartę</button>
-        <button data-debug="add-card-lineup">Dodaj kartę do Line-Up</button>
+        <div class="debug-header" data-translate-key="debugPanel">PANEL DEBUGOWANIA</div>
+        <button data-debug="draw-card" data-translate-key="drawCard">Dobierz kartę</button>
+        <button data-debug="add-power" data-translate-key="addPower">Dodaj Moc (+1)</button>
+        <button data-debug="remove-power" data-translate-key="removePower">Usuń Moc (-1)</button>
+        <button data-debug="add-card-hand" data-translate-key="addCardToHand">Dodaj kartę do ręki</button>
+        <button data-debug="destroy-card" data-translate-key="destroyCard">Zniszcz kartę</button>
+        <button data-debug="add-card-lineup" data-translate-key="addCardToLineUp">Dodaj kartę do Line-Up</button>
     </div>
 
     <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content"><span class="close-btn">&times;</span><h2>Ustawienia</h2><div class="setting-group"><label>Układ stołu:</label><select id="layout-select"><option value="default">Domyślny</option></select></div><div class="setting-group"><label>Język:</label><select id="language-select"><option value="pl">Polski</option><option value="en">English</option></select></div></div>
-    </div>
-    <div id="card-id-modal" class="modal-overlay">
-        <div class="modal-content"><span class="close-btn">&times;</span><h2 id="card-modal-title">Wybierz kartę</h2><select id="card-select-list"></select><button id="card-id-submit">Zatwierdź</button></div>
-    </div>
-
-    <div id="card-inspector"></div>
-
-    <div id="choice-modal" class="modal-overlay">
         <div class="modal-content">
-            <h2 id="choice-modal-title">Podejmij decyzję</h2>
-            <div id="choice-card-display"></div>
-            <p id="choice-modal-text"></p>
-            <div class="choice-buttons">
-                <button id="choice-yes-btn">Tak</button>
-                <button id="choice-no-btn">Nie</button>
+            <span class="close-btn">&times;</span>
+            <h2 data-translate-key="settingsTitle">Ustawienia</h2>
+            <div class="setting-group">
+                <label data-translate-key="boardLayout">Układ stołu:</label>
+                <select id="layout-select">
+                    <option value="default" data-translate-key="defaultLayout">Domyślny</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label data-translate-key="language">Język:</label>
+                <select id="language-select">
+                    <option value="pl">Polski</option>
+                    <option value="en">English</option>
+                </select>
             </div>
         </div>
     </div>
-
+    <div id="card-id-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2 id="card-modal-title" data-translate-key="selectCard">Wybierz kartę</h2>
+            <select id="card-select-list"></select>
+            <button id="card-id-submit" data-translate-key="confirm">Zatwierdź</button>
+        </div>
+    </div>
+    <div id="card-inspector"></div>
+    <div id="choice-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="choice-modal-title" data-translate-key="choiceTitle">Podejmij decyzję</h2>
+            <div id="choice-card-display"></div>
+            <p id="choice-modal-text"></p>
+            <div class="choice-buttons">
+                <button id="choice-yes-btn" data-translate-key="choiceYes">Tak</button>
+                <button id="choice-no-btn" data-translate-key="choiceNo">Nie</button>
+            </div>
+        </div>
+    </div>
     <div id="card-selection-modal" class="modal-overlay">
         <div class="modal-content">
-            <h2 id="selection-modal-title">Wybierz kartę</h2>
-            <div id="selection-card-list" class="card-row">
-                </div>
+            <h2 id="selection-modal-title" data-translate-key="selectCard">Wybierz kartę</h2>
+            <div id="selection-card-list" class="card-row"></div>
         </div>
     </div>
 

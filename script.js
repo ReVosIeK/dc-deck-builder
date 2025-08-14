@@ -205,6 +205,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (render) this.renderAll();
         }
 
+        gainWeakness() {
+            if (this.weaknessStack.length > 0) {
+                const weaknessCard = this.weaknessStack.pop();
+                this.player.discard.push(weaknessCard);
+                console.log("Gracz otrzymał Słabość.");
+            } else {
+                console.log("Stos Słabości jest pusty.");
+            }
+        }
+
         addCardById(cardId, destination) {
             const card = allCards.find(c => c.id === cardId);
             if (!card) { console.error(`Nie znaleziono karty o ID: ${cardId}`); return; }

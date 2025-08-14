@@ -36,7 +36,6 @@ export const effectHandlers = {
     on_play_effect: async (game, params) => {
         const effectString = params.join(':');
         
-        // Warunek dla "Nth Metal"
         if (effectString === 'reveal_deck_top_1_then_may_destroy_revealed') {
             if (game.player.deck.length === 0) game.shuffleDiscardIntoDeck();
             if (game.player.deck.length === 0) { console.log("Brak kart w talii do podejrzenia."); return; }
@@ -52,7 +51,6 @@ export const effectHandlers = {
                 console.log("Zdecydowano nie niszczyć karty.");
             }
         }
-        // NOWA LOGIKA DLA "BAT-SIGNAL" I PODOBNYCH
         else if (effectString.startsWith('move_card_from_')) {
             const match = effectString.match(/move_card_from_(.*)_to_(.*)_choice_type_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
@@ -61,7 +59,6 @@ export const effectHandlers = {
             
             let sourcePile;
             if (sourceZone === 'discard') sourcePile = game.player.discard;
-            // Można dodać 'else if' dla innych stref w przyszłości
 
             if (!sourcePile || sourcePile.length === 0) {
                 console.log(`Strefa źródłowa (${sourceZone}) jest pusta.`);
@@ -81,11 +78,9 @@ export const effectHandlers = {
             );
 
             if (chosenCard) {
-                // Usuń kartę ze strefy źródłowej
                 const cardIndex = sourcePile.findIndex(card => card === chosenCard);
                 if (cardIndex > -1) sourcePile.splice(cardIndex, 1);
                 
-                // Dodaj kartę do strefy docelowej
                 if (destZone === 'hand') game.player.hand.push(chosenCard);
                 console.log(`Przeniesiono ${chosenCard.name_pl} z ${sourceZone} do ${destZone}.`);
             } else {
@@ -94,6 +89,25 @@ export const effectHandlers = {
         }
         else {
             console.warn(`Nieznany efekt on_play_effect: ${effectString}`);
+        }
+    },
+    
+    /**
+     * NOWY EFEKT
+     * Obsługuje logikę Ataku.
+     * @param {Game} game - Instancja całej gry.
+     * @param {string[]} params - Parametry ataku, np. ['each_opponent_gains_weakness'].
+     */
+    attack: (game, params) => {
+        const attackString = params.join(':');
+
+        if (attackString === 'each_opponent_gains_weakness') {
+            console.log("Efekt Ataku: Przeciwnik otrzymuje Słabość.");
+            // W grze single-player, dla testów, dodamy słabość samemu sobie.
+            // W przyszłości można tu dodać logikę obrony.
+            game.gainWeakness();
+        } else {
+            console.warn(`Nieznany typ ataku: ${attackString}`);
         }
     }
 };

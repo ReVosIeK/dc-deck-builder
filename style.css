@@ -49,6 +49,7 @@ body {
 }
 
 #player-main-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#player-discard-pile-area, #player-deck-area { position: relative; } /* Potrzebne do pozycjonowania licznika */
 
 /* --- SEKCJA RĘKI GRACZA --- */
 #player-hand-container {
@@ -128,6 +129,20 @@ body {
     box-sizing: border-box;
 }
 
+/* --- NOWE STYLE LICZNIKÓW KART --- */
+.card-count {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    pointer-events: none; /* Aby licznik nie blokował kliknięć na kartę pod spodem */
+}
+
 /* --- INSPEKTOR KART --- */
 #card-inspector {
     position: fixed;
@@ -169,8 +184,6 @@ body {
 #choice-card-display { margin: 15px auto; width: 115px; height: 161px; }
 .choice-buttons { display: flex; gap: 15px; justify-content: center; margin-top: 15px; }
 .choice-buttons button { width: 100px; }
-
-/* STYLE DLA NOWEGO MODALA WYBORU KART */
 #selection-card-list {
     flex-wrap: wrap;
     gap: 15px;

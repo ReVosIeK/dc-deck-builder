@@ -53,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
                 powerTotal: document.getElementById('power-total'),
+                deckCount: document.getElementById('deck-count'),
+                discardCount: document.getElementById('discard-count'),
                 choiceModal: { element: document.getElementById('choice-modal'), title: document.getElementById('choice-modal-title'), cardDisplay: document.getElementById('choice-card-display'), text: document.getElementById('choice-modal-text'), yesBtn: document.getElementById('choice-yes-btn'), noBtn: document.getElementById('choice-no-btn'), waitForChoice: (prompt, card) => { return new Promise(resolve => { this.ui.choiceModal.text.textContent = prompt; if (card) { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.cardDisplay.style.display = 'block'; } else { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.style.display = 'none'; } this.ui.choiceModal.element.classList.add('active'); const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); }; this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true }); this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true }); }); } },
                 cardSelectionModal: { element: document.getElementById('card-selection-modal'), title: document.getElementById('selection-modal-title'), cardList: document.getElementById('selection-card-list'), waitForSelection: (prompt, cardsToChooseFrom) => { return new Promise(resolve => { this.ui.cardSelectionModal.title.textContent = prompt; this.ui.cardSelectionModal.cardList.innerHTML = ''; const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); }; cardsToChooseFrom.forEach(card => { const cardElement = this.createCardElement(card, 'selection'); cardElement.addEventListener('click', (event) => { event.stopPropagation(); resolvePromise(card) }); this.ui.cardSelectionModal.cardList.appendChild(cardElement); }); const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) { resolvePromise(null); } }; this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler); this.ui.cardSelectionModal.element.classList.add('active'); }); } }
             };
@@ -62,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         resetState() {
             this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [], activeTurnEffects: [] };
-            Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
+            Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined && !zone.id?.endsWith('-count')) zone.innerHTML = ''; });
         }
 
         setupNewGame() {
@@ -369,7 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderAll() {
-            Object.values(this.ui).forEach(zone => { if (zone && zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
+            Object.values(this.ui).forEach(zone => { 
+                if (zone && !zone.id?.endsWith('-count') && zone.id !== 'power-total' && zone.element === undefined) {
+                    zone.innerHTML = ''; 
+                }
+            });
             this.player.hand.forEach(card => this.ui.playerHand.appendChild(this.createCardElement(card, 'hand')));
             this.player.played.forEach(card => this.ui.playedCards.appendChild(this.createCardElement(card, 'played')));
             this.player.locations.forEach(card => this.ui.playerLocations.appendChild(this.createCardElement(card, 'location')));
@@ -382,7 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.kickStack.length > 0) this.ui.kickStack.appendChild(this.createCardElement(this.kickStack[0], 'kick'));
             if (this.weaknessStack.length > 0) this.ui.weaknessStack.appendChild(this.createCardElement(this.weaknessStack[0], 'weakness'));
             if (this.superVillainStack.length > 0) this.ui.superVillainStack.appendChild(this.createCardElement(this.superVillainStack[this.superVillainStack.length - 1], 'super-villain'));
+            
             this.ui.powerTotal.textContent = this.player.power;
+            this.ui.deckCount.textContent = this.player.deck.length;
+            this.ui.discardCount.textContent = this.player.discard.length;
         }
     }
 

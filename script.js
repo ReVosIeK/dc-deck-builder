@@ -1,4 +1,5 @@
 // script.js
+// AKTUALNE
 
 import { effectHandlers } from './effects.js';
 import { translations } from './translations.js';

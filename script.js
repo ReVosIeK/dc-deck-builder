@@ -142,11 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         endGame(reason) {
             const finalScore = this.calculateVictoryPoints();
-            const lang = translations[currentLanguage];
-            const title = lang.gameEndTitle || "Game Over!";
-            const scoreText = lang.yourScore || "Your score: ";
             setTimeout(() => {
-                alert(`${title}\n${reason}\n\n${scoreText}${finalScore} VP`);
+                alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
             }, 100);
         }
 
@@ -287,10 +284,28 @@ document.addEventListener('DOMContentLoaded', () => {
             if (render) this.renderAll();
         }
 
-        gainWeakness() {
-            if (this.weaknessStack.length > 0) {
-                const weaknessCard = this.weaknessStack.pop();
-                this.player.discard.push(weaknessCard);
+        async gainCard(card, sourcePile) {
+            this.player.cardsGainedThisTurn.push(card);
+            const gainModifier = this.player.activeTurnEffects.find(eff => eff.type === 'modify_gain_destination');
+            let destination = 'discard';
+            if (gainModifier && gainModifier.optional) {
+                const choice = await this.ui.choiceModal.waitForChoice(`Położyć "${card[`name_${currentLanguage}`]}" na wierzchu talii?`, card);
+                if (choice === 'yes') {
+                    destination = gainModifier.destination;
+                }
+            }
+            if (destination === 'deck_top') {
+                this.player.deck.push(card);
+            } else {
+                this.player.discard.push(card);
+            }
+            const cardIndex = sourcePile.findIndex(c => c === card);
+            if (cardIndex > -1) {
+                if (sourcePile === this.lineUp) {
+                    sourcePile[cardIndex] = null;
+                } else {
+                    sourcePile.splice(cardIndex, 1);
+                }
             }
         }
 

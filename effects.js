@@ -13,6 +13,41 @@ export const effectHandlers = {
         game.player.power += amount;
     },
 
+    then_discard_card: async (game, params) => {
+        const effectString = params.join(':');
+        const match = effectString.match(/count=(\d+)_from_hand_choice/);
+        if (!match) { console.warn(`Nie udało się sparsować efektu then_discard_card: ${effectString}`); return; }
+
+        const count = parseInt(match[1], 10);
+
+        for (let i = 0; i < count; i++) {
+            // Jeśli ręka jest pusta, przerywamy pętlę
+            if (game.player.hand.length === 0) {
+                console.log("Ręka jest pusta, nie można odrzucić więcej kart.");
+                break;
+            }
+
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
+                `Wybierz kartę do odrzucenia (${i + 1}/${count}):`,
+                game.player.hand
+            );
+
+            if (chosenCard) {
+                // Znajdź i przenieś kartę z ręki do odrzutów
+                const cardIndex = game.player.hand.findIndex(card => card === chosenCard);
+                if (cardIndex > -1) {
+                    const [discardedCard] = game.player.hand.splice(cardIndex, 1);
+                    game.player.discard.push(discardedCard);
+                    console.log(`Odrzucono kartę: ${discardedCard.name_pl}`);
+                }
+            } else {
+                // Gracz zamknął okno - przerywamy dalsze odrzucanie
+                console.log("Anulowano wybór karty do odrzucenia.");
+                break;
+            }
+        }
+    },
+
     conditional_power: (game, params) => {
         const conditionString = params.join(':');
         const match = conditionString.match(/if_discard_pile_empty_then_(\d+)_else_(\d+)/);
@@ -103,6 +138,34 @@ export const effectHandlers = {
                 console.log(`Clayface kopiuje efekt karty: ${chosenCard.name_pl}`);
                 game.player.power += chosenCard.power || 0;
                 await game.executeCardEffects(chosenCard);
+            }
+        }
+        else if (effectString.startsWith('gain_card_from_')) {
+            const match = effectString.match(/gain_card_from_(.*)_choice_cost_le_(\d+)/);
+            if (!match) { console.warn(`Nie udało się sparsować efektu gain_card: ${effectString}`); return; }
+
+            const [, sourceZone, costLimitStr] = match;
+            const costLimit = parseInt(costLimitStr, 10);
+
+            let sourcePile;
+            if (sourceZone === 'lineup') sourcePile = game.lineUp;
+            else { return; }
+
+            const validCards = sourcePile.filter(card => card && card.cost <= costLimit);
+
+            if (validCards.length === 0) {
+                console.log(`Brak kart do zdobycia o koszcie ${costLimit} lub mniej.`);
+                return;
+            }
+
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
+                `Wybierz kartę o koszcie ${costLimit} lub mniej:`,
+                validCards
+            );
+
+            if (chosenCard) {
+                console.log(`Zdobywasz kartę: ${chosenCard.name_pl}`);
+                await game.gainCard(chosenCard, sourcePile);
             }
         }
         else {

@@ -32,7 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor() {
             this.player = {
                 superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
-                firstPlaysThisTurn: new Set()
+                firstPlaysThisTurn: new Set(),
+                cardsPlayedThisTurn: [],
+                cardsGainedThisTurn: []
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
@@ -61,8 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     waitForChoice: (prompt, card) => {
                         return new Promise(resolve => {
                             this.ui.choiceModal.text.textContent = prompt;
-                            this.ui.choiceModal.cardDisplay.innerHTML = '';
-                            this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
+                            if (card) {
+                                this.ui.choiceModal.cardDisplay.innerHTML = '';
+                                this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
+                                this.ui.choiceModal.cardDisplay.style.display = 'block';
+                            } else {
+                                this.ui.choiceModal.cardDisplay.innerHTML = '';
+                                this.ui.choiceModal.cardDisplay.style.display = 'none';
+                            }
                             this.ui.choiceModal.element.classList.add('active');
                             const resolvePromise = (choice) => {
                                 this.ui.choiceModal.element.classList.remove('active');
@@ -81,29 +89,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         return new Promise(resolve => {
                             this.ui.cardSelectionModal.title.textContent = prompt;
                             this.ui.cardSelectionModal.cardList.innerHTML = '';
-                            
                             const resolvePromise = (card) => {
                                 this.ui.cardSelectionModal.element.classList.remove('active');
-                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); // Clean up listener
+                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler);
                                 resolve(card);
                             };
-
                             cardsToChooseFrom.forEach(card => {
                                 const cardElement = this.createCardElement(card, 'selection');
                                 cardElement.addEventListener('click', (event) => {
-                                    event.stopPropagation(); // Prevent the background click from firing
+                                    event.stopPropagation();
                                     resolvePromise(card)
                                 });
                                 this.ui.cardSelectionModal.cardList.appendChild(cardElement);
                             });
-
                             const closeModalHandler = (e) => {
                                 if (e.target === this.ui.cardSelectionModal.element) {
                                     resolvePromise(null);
                                 }
                             };
                             this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
-
                             this.ui.cardSelectionModal.element.classList.add('active');
                         });
                     }
@@ -114,9 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
         
         resetState() {
-            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set() };
-            this.mainDeck = []; this.lineUp = []; this.kickStack = [];
-            this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
+            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [] };
             Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
         }
 
@@ -147,57 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll();
         }
 
-        async defeatSuperVillain() {
-            if (this.superVillainStack.length === 0) return;
-            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
-
-            if (this.player.power >= superVillain.cost) {
-                console.log(`Pokonujesz ${superVillain.name_pl}!`);
-                this.player.power -= superVillain.cost;
-
-                const defeatedSV = this.superVillainStack.pop();
-                this.player.discard.push(defeatedSV);
-
-                if (this.superVillainStack.length > 0) {
-                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
-                    console.log(`Pojawia się nowy Super-Złoczyńca: ${nextSuperVillain.name_pl}!`);
-                    
-                    if (nextSuperVillain.effect_tags) {
-                        for (const tag of nextSuperVillain.effect_tags) {
-                            if (tag.startsWith('first_appearance_attack')) {
-                                const [effectName, ...params] = tag.split(':');
-                                if (effectHandlers[effectName]) {
-                                    await effectHandlers[effectName](this, params);
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    console.log("Pokonano ostatniego Super-Złoczyńcę!");
-                }
-                this.renderAll();
-            } else {
-                console.log(`Za mało mocy, by pokonać ${superVillain.name_pl}. Wymagane: ${superVillain.cost}, Masz: ${this.player.power}`);
-            }
-        }
-
         endTurn() {
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
-            this.player.hand = []; this.player.played = []; this.player.power = 0;
+            this.player.hand = [];
+            this.player.played = [];
+            this.player.power = 0;
             this.player.firstPlaysThisTurn.clear();
+            this.player.cardsPlayedThisTurn = [];
+            this.player.cardsGainedThisTurn = [];
             
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
             
-            if (this.superVillainStack.length === 0) {
-                this.endGame("Pokonano ostatniego Super-Złoczyńcę!");
-                return;
-            }
-            if (this.lineUp.length < 5 && this.mainDeck.length === 0) {
-                this.endGame("Nie można uzupełnić Line-Upu!");
-                return;
-            }
+            if (this.superVillainStack.length === 0) { this.endGame("Pokonano ostatniego Super-Złoczyńcę!"); return; }
+            if (this.lineUp.length < 5 && this.mainDeck.length === 0) { this.endGame("Nie można uzupełnić Line-Upu!"); return; }
 
             for(let i = 0; i < 5; i++) { this.drawCard(false); }
             this.renderAll();
@@ -209,9 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         endGame(reason) {
-            console.log("--- KONIEC GRY ---");
             const finalScore = this.calculateVictoryPoints();
-            console.log(`Ostateczny wynik: ${finalScore} punktów zwycięstwa.`);
             alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
         }
 
@@ -262,6 +226,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) return;
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
+            
+            this.player.cardsPlayedThisTurn.push(cardToPlay);
+
             if (cardToPlay.type === 'Location') {
                 this.player.locations.push(cardToPlay);
             } else {
@@ -273,14 +240,24 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll();
         }
 
+        buyCard(card, sourcePile, sourceIndex = -1) {
+            this.player.power -= card.cost;
+            this.player.discard.push(card);
+            this.player.cardsGainedThisTurn.push(card);
+
+            if (sourcePile === this.lineUp) {
+                sourcePile[sourceIndex] = null;
+            } else if (sourcePile) {
+                sourcePile.pop();
+            }
+        }
+
         buyCardFromLineUp(cardId) {
             const cardIndex = this.lineUp.findIndex(c => c && c.id === cardId);
             if (cardIndex === -1) return;
             const cardToBuy = this.lineUp[cardIndex];
             if (this.player.power >= cardToBuy.cost) {
-                this.player.power -= cardToBuy.cost;
-                this.player.discard.push(cardToBuy);
-                this.lineUp[cardIndex] = null;
+                this.buyCard(cardToBuy, this.lineUp, cardIndex);
                 this.renderAll();
             }
         }
@@ -289,12 +266,33 @@ document.addEventListener('DOMContentLoaded', () => {
             if (this.kickStack.length === 0) return;
             const kickCard = this.kickStack[0];
             if (this.player.power >= kickCard.cost) {
-                this.player.power -= kickCard.cost;
-                this.player.discard.push(this.kickStack.pop());
-                console.log(`Kupiono Kopniaka za ${kickCard.cost}. Pozostało mocy: ${this.player.power}`);
+                this.buyCard(this.kickStack[this.kickStack.length - 1], this.kickStack);
                 this.renderAll();
-            } else {
-                console.log(`Za mało mocy by kupić Kopniaka. Wymagane: ${kickCard.cost}, Masz: ${this.player.power}`);
+            }
+        }
+        
+        async defeatSuperVillain() {
+            if (this.superVillainStack.length === 0) return;
+            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
+
+            if (this.player.power >= superVillain.cost) {
+                const defeatedSV = this.superVillainStack.pop();
+                this.buyCard(defeatedSV, null);
+                
+                if (this.superVillainStack.length > 0) {
+                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
+                    if (nextSuperVillain.effect_tags) {
+                        for (const tag of nextSuperVillain.effect_tags) {
+                            if (tag.startsWith('first_appearance_attack')) {
+                                const [effectName, ...params] = tag.split(':');
+                                if (effectHandlers[effectName]) {
+                                    await effectHandlers[effectName](this, params);
+                                }
+                            }
+                        }
+                    }
+                }
+                this.renderAll();
             }
         }
         

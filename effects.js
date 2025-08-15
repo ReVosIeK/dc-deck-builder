@@ -69,7 +69,6 @@ export const effectHandlers = {
                 await game.executeCardEffects(topCard);
             }
         }
-        // NOWA LOGIKA DLA "DARK KNIGHT"
         else if (effectString.startsWith('gain_all_type_')) {
             const match = effectString.match(/gain_all_type_(.*)_from_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
@@ -79,21 +78,46 @@ export const effectHandlers = {
             if (sourceZone === 'lineup') sourcePile = game.lineUp;
             else { return; }
 
-            console.log(`Efekt: Zdobywanie wszystkich kart typu '${cardType}' z '${sourceZone}'.`);
             const cardsToGain = [];
-            
-            // Iterujemy po indeksach, bo będziemy modyfikować tablicę w locie
             for (let i = 0; i < sourcePile.length; i++) {
                 const card = sourcePile[i];
                 if (card && card.type.toLowerCase() === cardType.toLowerCase()) {
                     cardsToGain.push(card);
-                    sourcePile[i] = null; // Zastępujemy kartę placeholderem
+                    sourcePile[i] = null;
                 }
             }
 
             if (cardsToGain.length > 0) {
                 game.player.discard.push(...cardsToGain);
-                console.log(`Zdobyto ${cardsToGain.length} kart(y) Ekwipunku.`);
+                game.player.cardsGainedThisTurn.push(...cardsToGain);
+            }
+        }
+        // PRZENIESIONA I POPRAWIONA LOGIKA COMBO Z CATWOMAN
+        else if (effectString.startsWith('if_card_played_this_turn_id_')) {
+            const match = effectString.match(/if_card_played_this_turn_id_(.*)_then_(.*)/);
+            if (!match) { console.warn(`Nie udało się sparsować efektu warunkowego: ${effectString}`); return; }
+
+            const [, cardId, thenAction] = match;
+
+            const conditionMet = game.player.cardsPlayedThisTurn.some(card => card.id === cardId);
+
+            if (conditionMet) {
+                console.log(`Warunek spełniony: zagrano ${cardId} w tej turze.`);
+                if (thenAction === 'may_move_all_gained_or_bought_cards_this_turn_to_hand') {
+                    if (game.player.cardsGainedThisTurn.length > 0) {
+                        const choice = await game.ui.choiceModal.waitForChoice("Zagrałeś Catwoman. Przenieść zdobyte karty do ręki?", null);
+                        if (choice === 'yes') {
+                            for (const gainedCard of game.player.cardsGainedThisTurn) {
+                                const cardIndex = game.player.discard.findIndex(c => c === gainedCard);
+                                if (cardIndex > -1) {
+                                    const [movedCard] = game.player.discard.splice(cardIndex, 1);
+                                    game.player.hand.push(movedCard);
+                                }
+                            }
+                            game.player.cardsGainedThisTurn = [];
+                        }
+                    }
+                }
             }
         }
         else {

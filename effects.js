@@ -45,17 +45,28 @@ export const effectHandlers = {
         else if (effectString.startsWith('move_card_from_')) {
             const match = effectString.match(/move_card_from_(.*)_to_(.*)_choice_type_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
+
             const [, sourceZone, destZone, cardType] = match;
+            
             let sourcePile;
             if (sourceZone === 'discard') sourcePile = game.player.discard;
             else { return; }
+
             if (!sourcePile || sourcePile.length === 0) { return; }
+            
             const validCards = sourcePile.filter(card => card.type.toLowerCase().includes(cardType.toLowerCase()));
+
             if (validCards.length === 0) { return; }
-            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(`Wybierz ${cardType}, aby przenieść do ${destZone}:`, [...new Map(validCards.map(item => [item.id, item])).values()]);
+
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
+                `Wybierz ${cardType}, aby przenieść do ${destZone}:`,
+                [...new Map(validCards.map(item => [item.id, item])).values()]
+            );
+
             if (chosenCard) {
                 const cardIndex = sourcePile.findIndex(card => card.id === chosenCard.id);
                 if (cardIndex > -1) sourcePile.splice(cardIndex, 1);
+                
                 if (destZone === 'hand') game.player.hand.push(chosenCard);
             }
         }
@@ -92,7 +103,6 @@ export const effectHandlers = {
                 game.player.cardsGainedThisTurn.push(...cardsToGain);
             }
         }
-        // PRZENIESIONA I POPRAWIONA LOGIKA COMBO Z CATWOMAN
         else if (effectString.startsWith('if_card_played_this_turn_id_')) {
             const match = effectString.match(/if_card_played_this_turn_id_(.*)_then_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu warunkowego: ${effectString}`); return; }
@@ -102,10 +112,9 @@ export const effectHandlers = {
             const conditionMet = game.player.cardsPlayedThisTurn.some(card => card.id === cardId);
 
             if (conditionMet) {
-                console.log(`Warunek spełniony: zagrano ${cardId} w tej turze.`);
                 if (thenAction === 'may_move_all_gained_or_bought_cards_this_turn_to_hand') {
                     if (game.player.cardsGainedThisTurn.length > 0) {
-                        const choice = await game.ui.choiceModal.waitForChoice("Zagrałeś Catwoman. Przenieść zdobyte karty do ręki?", null);
+                        const choice = await game.ui.choiceModal.waitForChoice("Przenieść zdobyte karty do ręki?", null);
                         if (choice === 'yes') {
                             for (const gainedCard of game.player.cardsGainedThisTurn) {
                                 const cardIndex = game.player.discard.findIndex(c => c === gainedCard);
@@ -145,6 +154,18 @@ export const effectHandlers = {
         }
         else {
             console.warn(`Niezaimplementowany Atak Pierwszego Pojawienia: ${attackString}`);
+        }
+    },
+    
+    modify_gain_destination: (game, params) => {
+        const effectString = params.join(':');
+        if (effectString === 'top_deck_may') {
+            console.log("Aktywowano efekt: Zdobyte karty można położyć na wierzchu talii.");
+            game.player.activeTurnEffects.push({
+                type: 'modify_gain_destination',
+                destination: 'deck_top',
+                optional: true
+            });
         }
     }
 };

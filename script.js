@@ -34,11 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
                 firstPlaysThisTurn: new Set(),
                 cardsPlayedThisTurn: [],
-                cardsGainedThisTurn: []
+                cardsGainedThisTurn: [],
+                activeTurnEffects: []
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
-
             this.ui = {
                 playerHand: document.querySelector('#player-hand-area .card-row'),
                 playerDeck: document.querySelector('#player-deck-area .card-stack'),
@@ -61,9 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
         
         resetState() {
-            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [] };
-            this.mainDeck = []; this.lineUp = []; this.kickStack = [];
-            this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
+            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [], activeTurnEffects: [] };
             Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
         }
 
@@ -94,29 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll();
         }
 
-        async defeatSuperVillain() {
-            if (this.superVillainStack.length === 0) return;
-            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
-            if (this.player.power >= superVillain.cost) {
-                const defeatedSV = this.superVillainStack.pop();
-                this.buyCard(defeatedSV, null);
-                if (this.superVillainStack.length > 0) {
-                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
-                    if (nextSuperVillain.effect_tags) {
-                        for (const tag of nextSuperVillain.effect_tags) {
-                            if (tag.startsWith('first_appearance_attack')) {
-                                const [effectName, ...params] = tag.split(':');
-                                if (effectHandlers[effectName]) {
-                                    await effectHandlers[effectName](this, params);
-                                }
-                            }
-                        }
-                    }
-                }
-                this.renderAll();
-            }
-        }
-
         endTurn() {
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
@@ -124,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.player.firstPlaysThisTurn.clear();
             this.player.cardsPlayedThisTurn = [];
             this.player.cardsGainedThisTurn = [];
+            this.player.activeTurnEffects = [];
             
             this.lineUp = this.lineUp.filter(card => card !== null);
             this.refillLineUp();
@@ -137,17 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         calculateVictoryPoints() {
             const allPlayerCards = [ ...this.player.deck, ...this.player.hand, ...this.player.discard, ...this.player.played, ...this.player.locations ];
-            
             let finalVp = 0;
             const cardCounts = {};
-
             allPlayerCards.forEach(card => {
                 cardCounts[card.type] = (cardCounts[card.type] || 0) + 1;
             });
-
             allPlayerCards.forEach(card => {
                 let cardVp = card.vp || 0;
-
                 if (card.effect_tags) {
                     card.effect_tags.forEach(tag => {
                         if (tag.startsWith('vp_endgame_conditional')) {
@@ -156,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const [, type, countStr, vpStr] = match;
                                 const requiredCount = parseInt(countStr, 10);
                                 const newVp = parseInt(vpStr, 10);
-                                
                                 if (card.id === 'utility_belt' && (cardCounts['Equipment'] || 0) >= requiredCount + 1) {
                                     cardVp = newVp;
                                 }
@@ -166,15 +137,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 finalVp += cardVp;
             });
-
             return finalVp;
         }
 
         endGame(reason) {
-            console.log("--- KONIEC GRY ---");
             const finalScore = this.calculateVictoryPoints();
-            console.log(`Ostateczny wynik: ${finalScore} punktów zwycięstwa.`);
-            
             setTimeout(() => {
                 alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
             }, 100);
@@ -239,10 +206,26 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll();
         }
 
-        buyCard(card, sourcePile, sourceIndex = -1) {
+        async buyCard(card, sourcePile, sourceIndex = -1) {
             this.player.power -= card.cost;
-            this.player.discard.push(card);
             this.player.cardsGainedThisTurn.push(card);
+            const gainModifier = this.player.activeTurnEffects.find(eff => eff.type === 'modify_gain_destination');
+            let destination = 'discard';
+            if (gainModifier) {
+                if (gainModifier.optional) {
+                    const choice = await this.ui.choiceModal.waitForChoice(`Położyć "${card[`name_${currentLanguage}`]}" na wierzchu talii?`, card);
+                    if (choice === 'yes') {
+                        destination = gainModifier.destination;
+                    }
+                } else {
+                    destination = gainModifier.destination;
+                }
+            }
+            if (destination === 'deck_top') {
+                this.player.deck.push(card);
+            } else {
+                this.player.discard.push(card);
+            }
             if (sourcePile === this.lineUp) {
                 sourcePile[sourceIndex] = null;
             } else if (sourcePile) {
@@ -250,21 +233,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        buyCardFromLineUp(cardId) {
+        async buyCardFromLineUp(cardId) {
             const cardIndex = this.lineUp.findIndex(c => c && c.id === cardId);
             if (cardIndex === -1) return;
             const cardToBuy = this.lineUp[cardIndex];
             if (this.player.power >= cardToBuy.cost) {
-                this.buyCard(cardToBuy, this.lineUp, cardIndex);
+                await this.buyCard(cardToBuy, this.lineUp, cardIndex);
                 this.renderAll();
             }
         }
 
-        buyKickCard() {
+        async buyKickCard() {
             if (this.kickStack.length === 0) return;
             const kickCard = this.kickStack[0];
             if (this.player.power >= kickCard.cost) {
-                this.buyCard(this.kickStack[this.kickStack.length - 1], this.kickStack);
+                await this.buyCard(this.kickStack[this.kickStack.length - 1], this.kickStack);
+                this.renderAll();
+            }
+        }
+        
+        async defeatSuperVillain() {
+            if (this.superVillainStack.length === 0) return;
+            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
+            if (this.player.power >= superVillain.cost) {
+                const defeatedSV = this.superVillainStack.pop();
+                await this.buyCard(defeatedSV, null);
+                if (this.superVillainStack.length > 0) {
+                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
+                    if (nextSuperVillain.effect_tags) {
+                        for (const tag of nextSuperVillain.effect_tags) {
+                            if (tag.startsWith('first_appearance_attack')) {
+                                const [effectName, ...params] = tag.split(':');
+                                if (effectHandlers[effectName]) {
+                                    await effectHandlers[effectName](this, params);
+                                }
+                            }
+                        }
+                    }
+                }
                 this.renderAll();
             }
         }

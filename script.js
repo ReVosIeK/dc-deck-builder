@@ -53,65 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
                 powerTotal: document.getElementById('power-total'),
-                choiceModal: {
-                    element: document.getElementById('choice-modal'),
-                    title: document.getElementById('choice-modal-title'),
-                    cardDisplay: document.getElementById('choice-card-display'),
-                    text: document.getElementById('choice-modal-text'),
-                    yesBtn: document.getElementById('choice-yes-btn'),
-                    noBtn: document.getElementById('choice-no-btn'),
-                    waitForChoice: (prompt, card) => {
-                        return new Promise(resolve => {
-                            this.ui.choiceModal.text.textContent = prompt;
-                            if (card) {
-                                this.ui.choiceModal.cardDisplay.innerHTML = '';
-                                this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
-                                this.ui.choiceModal.cardDisplay.style.display = 'block';
-                            } else {
-                                this.ui.choiceModal.cardDisplay.innerHTML = '';
-                                this.ui.choiceModal.cardDisplay.style.display = 'none';
-                            }
-                            this.ui.choiceModal.element.classList.add('active');
-                            const resolvePromise = (choice) => {
-                                this.ui.choiceModal.element.classList.remove('active');
-                                resolve(choice);
-                            };
-                            this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
-                            this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
-                        });
-                    }
-                },
-                cardSelectionModal: {
-                    element: document.getElementById('card-selection-modal'),
-                    title: document.getElementById('selection-modal-title'),
-                    cardList: document.getElementById('selection-card-list'),
-                    waitForSelection: (prompt, cardsToChooseFrom) => {
-                        return new Promise(resolve => {
-                            this.ui.cardSelectionModal.title.textContent = prompt;
-                            this.ui.cardSelectionModal.cardList.innerHTML = '';
-                            const resolvePromise = (card) => {
-                                this.ui.cardSelectionModal.element.classList.remove('active');
-                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler);
-                                resolve(card);
-                            };
-                            cardsToChooseFrom.forEach(card => {
-                                const cardElement = this.createCardElement(card, 'selection');
-                                cardElement.addEventListener('click', (event) => {
-                                    event.stopPropagation();
-                                    resolvePromise(card)
-                                });
-                                this.ui.cardSelectionModal.cardList.appendChild(cardElement);
-                            });
-                            const closeModalHandler = (e) => {
-                                if (e.target === this.ui.cardSelectionModal.element) {
-                                    resolvePromise(null);
-                                }
-                            };
-                            this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
-                            this.ui.cardSelectionModal.element.classList.add('active');
-                        });
-                    }
-                }
+                choiceModal: { element: document.getElementById('choice-modal'), title: document.getElementById('choice-modal-title'), cardDisplay: document.getElementById('choice-card-display'), text: document.getElementById('choice-modal-text'), yesBtn: document.getElementById('choice-yes-btn'), noBtn: document.getElementById('choice-no-btn'), waitForChoice: (prompt, card) => { return new Promise(resolve => { this.ui.choiceModal.text.textContent = prompt; if (card) { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.cardDisplay.style.display = 'block'; } else { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.style.display = 'none'; } this.ui.choiceModal.element.classList.add('active'); const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); }; this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true }); this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true }); }); } },
+                cardSelectionModal: { element: document.getElementById('card-selection-modal'), title: document.getElementById('selection-modal-title'), cardList: document.getElementById('selection-card-list'), waitForSelection: (prompt, cardsToChooseFrom) => { return new Promise(resolve => { this.ui.cardSelectionModal.title.textContent = prompt; this.ui.cardSelectionModal.cardList.innerHTML = ''; const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); }; cardsToChooseFrom.forEach(card => { const cardElement = this.createCardElement(card, 'selection'); cardElement.addEventListener('click', (event) => { event.stopPropagation(); resolvePromise(card) }); this.ui.cardSelectionModal.cardList.appendChild(cardElement); }); const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) { resolvePromise(null); } }; this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler); this.ui.cardSelectionModal.element.classList.add('active'); }); } }
             };
         }
         
@@ -119,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         resetState() {
             this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [] };
+            this.mainDeck = []; this.lineUp = []; this.kickStack = [];
+            this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
             Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined) zone.innerHTML = ''; });
         }
 
@@ -149,12 +94,33 @@ document.addEventListener('DOMContentLoaded', () => {
             this.renderAll();
         }
 
+        async defeatSuperVillain() {
+            if (this.superVillainStack.length === 0) return;
+            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
+            if (this.player.power >= superVillain.cost) {
+                const defeatedSV = this.superVillainStack.pop();
+                this.buyCard(defeatedSV, null);
+                if (this.superVillainStack.length > 0) {
+                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
+                    if (nextSuperVillain.effect_tags) {
+                        for (const tag of nextSuperVillain.effect_tags) {
+                            if (tag.startsWith('first_appearance_attack')) {
+                                const [effectName, ...params] = tag.split(':');
+                                if (effectHandlers[effectName]) {
+                                    await effectHandlers[effectName](this, params);
+                                }
+                            }
+                        }
+                    }
+                }
+                this.renderAll();
+            }
+        }
+
         endTurn() {
             this.player.discard.push(...this.player.hand);
             this.player.discard.push(...this.player.played);
-            this.player.hand = [];
-            this.player.played = [];
-            this.player.power = 0;
+            this.player.hand = []; this.player.played = []; this.player.power = 0;
             this.player.firstPlaysThisTurn.clear();
             this.player.cardsPlayedThisTurn = [];
             this.player.cardsGainedThisTurn = [];
@@ -171,12 +137,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
         calculateVictoryPoints() {
             const allPlayerCards = [ ...this.player.deck, ...this.player.hand, ...this.player.discard, ...this.player.played, ...this.player.locations ];
-            return allPlayerCards.reduce((total, card) => total + (card.vp || 0), 0);
+            
+            let finalVp = 0;
+            const cardCounts = {};
+
+            allPlayerCards.forEach(card => {
+                cardCounts[card.type] = (cardCounts[card.type] || 0) + 1;
+            });
+
+            allPlayerCards.forEach(card => {
+                let cardVp = card.vp || 0;
+
+                if (card.effect_tags) {
+                    card.effect_tags.forEach(tag => {
+                        if (tag.startsWith('vp_endgame_conditional')) {
+                            const match = tag.match(/if_(.*)_count_ge_(\d+)_then_set_vp_(\d+)/);
+                            if (match) {
+                                const [, type, countStr, vpStr] = match;
+                                const requiredCount = parseInt(countStr, 10);
+                                const newVp = parseInt(vpStr, 10);
+                                
+                                if (card.id === 'utility_belt' && (cardCounts['Equipment'] || 0) >= requiredCount + 1) {
+                                    cardVp = newVp;
+                                }
+                            }
+                        }
+                    });
+                }
+                finalVp += cardVp;
+            });
+
+            return finalVp;
         }
 
         endGame(reason) {
+            console.log("--- KONIEC GRY ---");
             const finalScore = this.calculateVictoryPoints();
-            alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
+            console.log(`Ostateczny wynik: ${finalScore} punktów zwycięstwa.`);
+            
+            setTimeout(() => {
+                alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
+            }, 100);
         }
 
         refillLineUp() {
@@ -226,9 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
             if (cardIndex === -1) return;
             const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
-            
             this.player.cardsPlayedThisTurn.push(cardToPlay);
-
             if (cardToPlay.type === 'Location') {
                 this.player.locations.push(cardToPlay);
             } else {
@@ -244,7 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.player.power -= card.cost;
             this.player.discard.push(card);
             this.player.cardsGainedThisTurn.push(card);
-
             if (sourcePile === this.lineUp) {
                 sourcePile[sourceIndex] = null;
             } else if (sourcePile) {
@@ -267,31 +265,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const kickCard = this.kickStack[0];
             if (this.player.power >= kickCard.cost) {
                 this.buyCard(this.kickStack[this.kickStack.length - 1], this.kickStack);
-                this.renderAll();
-            }
-        }
-        
-        async defeatSuperVillain() {
-            if (this.superVillainStack.length === 0) return;
-            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
-
-            if (this.player.power >= superVillain.cost) {
-                const defeatedSV = this.superVillainStack.pop();
-                this.buyCard(defeatedSV, null);
-                
-                if (this.superVillainStack.length > 0) {
-                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
-                    if (nextSuperVillain.effect_tags) {
-                        for (const tag of nextSuperVillain.effect_tags) {
-                            if (tag.startsWith('first_appearance_attack')) {
-                                const [effectName, ...params] = tag.split(':');
-                                if (effectHandlers[effectName]) {
-                                    await effectHandlers[effectName](this, params);
-                                }
-                            }
-                        }
-                    }
-                }
                 this.renderAll();
             }
         }
@@ -438,6 +411,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 populateCardSelect(card => uniqueHandCards.some(handCard => handCard.id === card.id));
                 cardIdModalCallback = (cardId) => game.destroyCardFromHand(cardId);
                 showModal(cardIdModal); return;
+            case 'force-end-game':
+                game.endGame("Wymuszono koniec gry przez panel debugowania.");
+                return;
             default: return;
         }
     });

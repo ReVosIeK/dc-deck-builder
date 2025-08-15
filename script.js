@@ -51,8 +51,63 @@ document.addEventListener('DOMContentLoaded', () => {
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
                 powerTotal: document.getElementById('power-total'),
-                choiceModal: { element: document.getElementById('choice-modal'), title: document.getElementById('choice-modal-title'), cardDisplay: document.getElementById('choice-card-display'), text: document.getElementById('choice-modal-text'), yesBtn: document.getElementById('choice-yes-btn'), noBtn: document.getElementById('choice-no-btn'), waitForChoice: (prompt, card) => { return new Promise(resolve => { this.ui.choiceModal.text.textContent = prompt; this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.element.classList.add('active'); const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); }; this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true }); this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true }); }); } },
-                cardSelectionModal: { element: document.getElementById('card-selection-modal'), title: document.getElementById('selection-modal-title'), cardList: document.getElementById('selection-card-list'), waitForSelection: (prompt, cardsToChooseFrom) => { return new Promise(resolve => { this.ui.cardSelectionModal.title.textContent = prompt; this.ui.cardSelectionModal.cardList.innerHTML = ''; const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); }; cardsToChooseFrom.forEach(card => { const cardElement = this.createCardElement(card, 'selection'); cardElement.addEventListener('click', (event) => { event.stopPropagation(); resolvePromise(card) }); this.ui.cardSelectionModal.cardList.appendChild(cardElement); }); const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) { resolvePromise(null); } }; this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler); this.ui.cardSelectionModal.element.classList.add('active'); }); } }
+                choiceModal: {
+                    element: document.getElementById('choice-modal'),
+                    title: document.getElementById('choice-modal-title'),
+                    cardDisplay: document.getElementById('choice-card-display'),
+                    text: document.getElementById('choice-modal-text'),
+                    yesBtn: document.getElementById('choice-yes-btn'),
+                    noBtn: document.getElementById('choice-no-btn'),
+                    waitForChoice: (prompt, card) => {
+                        return new Promise(resolve => {
+                            this.ui.choiceModal.text.textContent = prompt;
+                            this.ui.choiceModal.cardDisplay.innerHTML = '';
+                            this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice'));
+                            this.ui.choiceModal.element.classList.add('active');
+                            const resolvePromise = (choice) => {
+                                this.ui.choiceModal.element.classList.remove('active');
+                                resolve(choice);
+                            };
+                            this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
+                            this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
+                        });
+                    }
+                },
+                cardSelectionModal: {
+                    element: document.getElementById('card-selection-modal'),
+                    title: document.getElementById('selection-modal-title'),
+                    cardList: document.getElementById('selection-card-list'),
+                    waitForSelection: (prompt, cardsToChooseFrom) => {
+                        return new Promise(resolve => {
+                            this.ui.cardSelectionModal.title.textContent = prompt;
+                            this.ui.cardSelectionModal.cardList.innerHTML = '';
+                            
+                            const resolvePromise = (card) => {
+                                this.ui.cardSelectionModal.element.classList.remove('active');
+                                this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); // Clean up listener
+                                resolve(card);
+                            };
+
+                            cardsToChooseFrom.forEach(card => {
+                                const cardElement = this.createCardElement(card, 'selection');
+                                cardElement.addEventListener('click', (event) => {
+                                    event.stopPropagation(); // Prevent the background click from firing
+                                    resolvePromise(card)
+                                });
+                                this.ui.cardSelectionModal.cardList.appendChild(cardElement);
+                            });
+
+                            const closeModalHandler = (e) => {
+                                if (e.target === this.ui.cardSelectionModal.element) {
+                                    resolvePromise(null);
+                                }
+                            };
+                            this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
+
+                            this.ui.cardSelectionModal.element.classList.add('active');
+                        });
+                    }
+                }
             };
         }
         
@@ -149,11 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         calculateVictoryPoints() {
-            const allPlayerCards = [
-                ...this.player.deck, ...this.player.hand,
-                ...this.player.discard, ...this.player.played,
-                ...this.player.locations
-            ];
+            const allPlayerCards = [ ...this.player.deck, ...this.player.hand, ...this.player.discard, ...this.player.played, ...this.player.locations ];
             return allPlayerCards.reduce((total, card) => total + (card.vp || 0), 0);
         }
 
@@ -233,6 +284,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.renderAll();
             }
         }
+
+        buyKickCard() {
+            if (this.kickStack.length === 0) return;
+            const kickCard = this.kickStack[0];
+            if (this.player.power >= kickCard.cost) {
+                this.player.power -= kickCard.cost;
+                this.player.discard.push(this.kickStack.pop());
+                console.log(`Kupiono Kopniaka za ${kickCard.cost}. Pozostało mocy: ${this.player.power}`);
+                this.renderAll();
+            } else {
+                console.log(`Za mało mocy by kupić Kopniaka. Wymagane: ${kickCard.cost}, Masz: ${this.player.power}`);
+            }
+        }
         
         drawCard(render = true) {
             if (this.player.deck.length === 0) { this.shuffleDiscardIntoDeck(); }
@@ -277,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cardDiv.dataset.id = cardData.id;
             const cardName = cardData[`name_${currentLanguage}`] || cardData.name_en;
             if (location !== 'selection' && location !== 'choice') {
-                if ((location === 'lineup' || location === 'super-villain') && this.player.power < cardData.cost) {
+                if ((location === 'lineup' || location === 'super-villain' || location === 'kick') && this.player.power < cardData.cost) {
                     cardDiv.classList.add('unaffordable');
                 } else {
                     cardDiv.addEventListener('click', (event) => {
@@ -306,6 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (location === 'hand') { this.playCardFromHand(cardData.id); }
             else if (location === 'lineup') { this.buyCardFromLineUp(cardData.id); }
             else if (location === 'super-villain') { this.defeatSuperVillain(); }
+            else if (location === 'kick') { this.buyKickCard(); }
         }
 
         renderAll() {
@@ -392,6 +457,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     languageSelect.addEventListener('change', (e) => {
         setLanguage(e.target.value);
+        if (game) {
+            game.renderAll();
+        }
     });
 
     async function main() {
@@ -410,6 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsBtn.addEventListener('click', () => { showModal(document.getElementById('settings-modal'));});
     endTurnBtn.addEventListener('click', () => { if (game) { game.endTurn(); } });
     
-    setLanguage('en');
+    setLanguage('pl');
     main();
 });

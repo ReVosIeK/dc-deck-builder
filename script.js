@@ -142,8 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         endGame(reason) {
             const finalScore = this.calculateVictoryPoints();
+            const lang = translations[currentLanguage];
+            const title = lang.gameEndTitle || "Game Over!";
+            const scoreText = lang.yourScore || "Your score: ";
             setTimeout(() => {
-                alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
+                alert(`${title}\n${reason}\n\n${scoreText}${finalScore} VP`);
             }, 100);
         }
 

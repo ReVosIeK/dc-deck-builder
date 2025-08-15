@@ -101,6 +101,7 @@ export const effectHandlers = {
             );
             if (chosenCard) {
                 console.log(`Clayface kopiuje efekt karty: ${chosenCard.name_pl}`);
+                game.player.power += chosenCard.power || 0;
                 await game.executeCardEffects(chosenCard);
             }
         }

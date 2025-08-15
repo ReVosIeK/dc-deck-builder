@@ -89,6 +89,21 @@ export const effectHandlers = {
                 game.player.cardsGainedThisTurn.push(...cardsToGain);
             }
         }
+        else if (effectString === 'play_again_card_choice_from_played_this_turn') {
+            const playableCards = game.player.played.filter(card => card.id !== 'clayface');
+            if (playableCards.length === 0) {
+                console.log("Brak innych kart w strefie zagranych, aby skopiować ich efekt.");
+                return;
+            }
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
+                "Wybierz kartę, której efekt chcesz skopiować:",
+                playableCards
+            );
+            if (chosenCard) {
+                console.log(`Clayface kopiuje efekt karty: ${chosenCard.name_pl}`);
+                await game.executeCardEffects(chosenCard);
+            }
+        }
         else {
             console.warn(`Nieznany efekt on_play_effect: ${effectString}`);
         }

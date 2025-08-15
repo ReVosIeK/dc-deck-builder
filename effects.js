@@ -45,28 +45,17 @@ export const effectHandlers = {
         else if (effectString.startsWith('move_card_from_')) {
             const match = effectString.match(/move_card_from_(.*)_to_(.*)_choice_type_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
-
             const [, sourceZone, destZone, cardType] = match;
-            
             let sourcePile;
             if (sourceZone === 'discard') sourcePile = game.player.discard;
             else { return; }
-
             if (!sourcePile || sourcePile.length === 0) { return; }
-            
             const validCards = sourcePile.filter(card => card.type.toLowerCase().includes(cardType.toLowerCase()));
-
             if (validCards.length === 0) { return; }
-
-            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
-                `Wybierz ${cardType}, aby przenieść do ${destZone}:`,
-                [...new Map(validCards.map(item => [item.id, item])).values()]
-            );
-
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(`Wybierz ${cardType}, aby przenieść do ${destZone}:`, [...new Map(validCards.map(item => [item.id, item])).values()]);
             if (chosenCard) {
                 const cardIndex = sourcePile.findIndex(card => card.id === chosenCard.id);
                 if (cardIndex > -1) sourcePile.splice(cardIndex, 1);
-                
                 if (destZone === 'hand') game.player.hand.push(chosenCard);
             }
         }
@@ -78,6 +67,33 @@ export const effectHandlers = {
             if (choice === 'yes') {
                 game.player.power += topCard.power || 0;
                 await game.executeCardEffects(topCard);
+            }
+        }
+        // NOWA LOGIKA DLA "DARK KNIGHT"
+        else if (effectString.startsWith('gain_all_type_')) {
+            const match = effectString.match(/gain_all_type_(.*)_from_(.*)/);
+            if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
+
+            const [, cardType, sourceZone] = match;
+            let sourcePile;
+            if (sourceZone === 'lineup') sourcePile = game.lineUp;
+            else { return; }
+
+            console.log(`Efekt: Zdobywanie wszystkich kart typu '${cardType}' z '${sourceZone}'.`);
+            const cardsToGain = [];
+            
+            // Iterujemy po indeksach, bo będziemy modyfikować tablicę w locie
+            for (let i = 0; i < sourcePile.length; i++) {
+                const card = sourcePile[i];
+                if (card && card.type.toLowerCase() === cardType.toLowerCase()) {
+                    cardsToGain.push(card);
+                    sourcePile[i] = null; // Zastępujemy kartę placeholderem
+                }
+            }
+
+            if (cardsToGain.length > 0) {
+                game.player.discard.push(...cardsToGain);
+                console.log(`Zdobyto ${cardsToGain.length} kart(y) Ekwipunku.`);
             }
         }
         else {

@@ -45,28 +45,17 @@ export const effectHandlers = {
         else if (effectString.startsWith('move_card_from_')) {
             const match = effectString.match(/move_card_from_(.*)_to_(.*)_choice_type_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
-
             const [, sourceZone, destZone, cardType] = match;
-            
             let sourcePile;
             if (sourceZone === 'discard') sourcePile = game.player.discard;
             else { return; }
-
             if (!sourcePile || sourcePile.length === 0) { return; }
-            
             const validCards = sourcePile.filter(card => card.type.toLowerCase().includes(cardType.toLowerCase()));
-
             if (validCards.length === 0) { return; }
-
-            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(
-                `Wybierz ${cardType}, aby przenieść do ${destZone}:`,
-                [...new Map(validCards.map(item => [item.id, item])).values()]
-            );
-
+            const chosenCard = await game.ui.cardSelectionModal.waitForSelection(`Wybierz ${cardType}, aby przenieść do ${destZone}:`, [...new Map(validCards.map(item => [item.id, item])).values()]);
             if (chosenCard) {
                 const cardIndex = sourcePile.findIndex(card => card.id === chosenCard.id);
                 if (cardIndex > -1) sourcePile.splice(cardIndex, 1);
-                
                 if (destZone === 'hand') game.player.hand.push(chosenCard);
             }
         }
@@ -83,12 +72,10 @@ export const effectHandlers = {
         else if (effectString.startsWith('gain_all_type_')) {
             const match = effectString.match(/gain_all_type_(.*)_from_(.*)/);
             if (!match) { console.warn(`Nie udało się sparsować efektu: ${effectString}`); return; }
-
             const [, cardType, sourceZone] = match;
             let sourcePile;
             if (sourceZone === 'lineup') sourcePile = game.lineUp;
             else { return; }
-
             const cardsToGain = [];
             for (let i = 0; i < sourcePile.length; i++) {
                 const card = sourcePile[i];
@@ -97,18 +84,22 @@ export const effectHandlers = {
                     sourcePile[i] = null;
                 }
             }
-
             if (cardsToGain.length > 0) {
                 game.player.discard.push(...cardsToGain);
                 game.player.cardsGainedThisTurn.push(...cardsToGain);
             }
         }
-        else if (effectString.startsWith('if_card_played_this_turn_id_')) {
-            const match = effectString.match(/if_card_played_this_turn_id_(.*)_then_(.*)/);
-            if (!match) { console.warn(`Nie udało się sparsować efektu warunkowego: ${effectString}`); return; }
+        else {
+            console.warn(`Nieznany efekt on_play_effect: ${effectString}`);
+        }
+    },
 
-            const [, cardId, thenAction] = match;
-
+    conditional_effect: async (game, params) => {
+        const effectString = params.join(':');
+        
+        const matchCatwoman = effectString.match(/if_card_played_this_turn_id_(.*)_then_(.*)/);
+        if (matchCatwoman) {
+            const [, cardId, thenAction] = matchCatwoman;
             const conditionMet = game.player.cardsPlayedThisTurn.some(card => card.id === cardId);
 
             if (conditionMet) {
@@ -128,9 +119,32 @@ export const effectHandlers = {
                     }
                 }
             }
+            return;
         }
-        else {
-            console.warn(`Nieznany efekt on_play_effect: ${effectString}`);
+
+        const matchFirstCard = effectString.match(/if_first_card_played_this_turn_then_(.*)_else_(.*)/);
+        if (matchFirstCard) {
+            const [, thenAction, elseAction] = matchFirstCard;
+
+            if (game.player.played.length === 1) {
+                console.log("Warunek spełniony: to pierwsza zagrana karta.");
+                if (thenAction === 'discard_hand_draw_5') {
+                    console.log("Efekt: Odrzucanie ręki i dobieranie 5 kart.");
+                    game.player.discard.push(...game.player.hand);
+                    game.player.hand = [];
+                    for (let i = 0; i < 5; i++) {
+                        game.drawCard(false);
+                    }
+                }
+            } else {
+                console.log("Warunek niespełniony: to nie jest pierwsza zagrana karta.");
+                const elseMatch = elseAction.match(/gain_power_(\d+)/);
+                if (elseMatch) {
+                    const powerAmount = parseInt(elseMatch[1], 10);
+                    console.log(`Efekt: Zdobywanie ${powerAmount} Mocy.`);
+                    game.player.power += powerAmount;
+                }
+            }
         }
     },
     
@@ -160,7 +174,6 @@ export const effectHandlers = {
     modify_gain_destination: (game, params) => {
         const effectString = params.join(':');
         if (effectString === 'top_deck_may') {
-            console.log("Aktywowano efekt: Zdobyte karty można położyć na wierzchu talii.");
             game.player.activeTurnEffects.push({
                 type: 'modify_gain_destination',
                 destination: 'deck_top',

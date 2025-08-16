@@ -111,7 +111,7 @@ body {
 
 .card:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10; }
 .card.unaffordable { filter: brightness(0.6) grayscale(0.5); cursor: not-allowed; }
-.card.is-face-down { background-image: url('assets/card_back.png'); background-color: var(--board-bg); color: transparent; }
+.card.is-face-down { background-image: url('assets/others/card_back.png'); background-color: var(--board-bg); color: transparent; }
 .side-stack .card { width: 110px; height: 154px; }
 .side-hand-zone .card { width: 110px; height: 154px; }
 

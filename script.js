@@ -1,45 +1,338 @@
-// script.js
-// AKTUALNE
-
 import { effectHandlers } from './effects.js';
 import { translations } from './translations.js';
+import { initializeAbilitySystem } from './abilities.js';
+
+class EventDispatcher {
+    constructor() {
+        this.listeners = {};
+    }
+    subscribe(eventName, callback) {
+        if (!this.listeners[eventName]) {
+            this.listeners[eventName] = [];
+        }
+        this.listeners[eventName].push(callback);
+    }
+    dispatch(eventName, data) {
+        if (this.listeners[eventName]) {
+            this.listeners[eventName].forEach(callback => callback(data));
+        }
+    }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Zmienne globalne ---
     let allCards = [];
     let deckComposition = [];
-    let currentLanguage = 'pl';
+    let game;
 
+    // --- Elementy UI ---
     const cardInspector = document.getElementById('card-inspector');
-    document.addEventListener('click', () => {
-        if (cardInspector.classList.contains('visible')) {
-            cardInspector.classList.remove('visible');
-        }
-    });
+    const startScreen = document.getElementById('start-screen');
+    const gameScreen = document.getElementById('game-screen');
+    const newGameBtn = document.getElementById('new-game-btn');
+    const settingsBtn = document.getElementById('settings-btn');
+    const endTurnBtn = document.getElementById('end-turn-btn');
+    const debugPanel = document.getElementById('debug-panel');
+    const languageSelect = document.getElementById('language-select');
+    const cardIdModal = document.getElementById('card-id-modal');
+    const cardIdSubmitBtn = document.getElementById('card-id-submit');
+    let cardIdModalCallback = null;
 
-    function setLanguage(lang) {
-        currentLanguage = lang;
-        document.querySelectorAll('[data-translate-key]').forEach(element => {
-            const key = element.dataset.translateKey;
-            if (translations[lang][key]) {
-                element.textContent = translations[lang][key];
-            }
-        });
-        document.querySelectorAll('.card-placeholder').forEach(el => {
-            el.textContent = translations[lang].emptySlot;
-        });
-    }
-
+    // --- Główna Klasa Gry ---
     class Game {
         constructor() {
+            this.events = new EventDispatcher();
+            this.currentLanguage = 'pl';
+
             this.player = {
-                superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0,
-                firstPlaysThisTurn: new Set(),
-                cardsPlayedThisTurn: [],
-                cardsGainedThisTurn: [],
-                activeTurnEffects: []
+                superhero: null, deck: [], hand: [], discard: [],
+                locations: [], played: [], power: 0,
+                cardsPlayedThisTurn: [], cardsGainedThisTurn: [],
+                activeTurnEffects: [], firstPlaysThisTurn: new Set()
+            };
+            
+            this.mainDeck = [];
+            this.lineUp = [];
+            this.kickStack = [];
+            this.weaknessStack = [];
+            this.superVillainStack = [];
+            this.destroyedPile = [];
+
+            this._initializeUI();
+        }
+
+        // --- Metody Inicjalizacyjne i Głównej Pętli Gry ---
+
+        setupNewGame() {
+            this.player = {
+                superhero: allCards.find(c => c.id === 'batman'), deck: [], hand: [],
+                discard: [], locations: [], played: [], power: 0,
+                cardsPlayedThisTurn: [], cardsGainedThisTurn: [],
+                activeTurnEffects: [], firstPlaysThisTurn: new Set()
             };
             this.mainDeck = []; this.lineUp = []; this.kickStack = [];
             this.weaknessStack = []; this.superVillainStack = []; this.destroyedPile = [];
+
+            for (let i = 0; i < 7; i++) {
+                this.player.deck.push(allCards.find(c => c.id === 'punch'));
+            }
+            for (let i = 0; i < 3; i++) {
+                this.player.deck.push(allCards.find(c => c.id === 'vulnerability'));
+            }
+            this.shuffle(this.player.deck);
+
+            deckComposition.forEach(item => {
+                const cardInfo = allCards.find(c => c.id === item.id);
+                if (cardInfo && !['Starter', 'Kick', 'Weakness', 'Super-Villain', 'Super-Hero'].includes(cardInfo.type)) {
+                    for (let i = 0; i < item.count; i++) {
+                        this.mainDeck.push(cardInfo);
+                    }
+                }
+            });
+            this.shuffle(this.mainDeck);
+
+            const kickCard = allCards.find(c => c.id === 'kick');
+            for (let i = 0; i < 16; i++) { this.kickStack.push(kickCard); }
+
+            const weaknessCard = allCards.find(c => c.id === 'weakness');
+            for (let i = 0; i < 20; i++) { this.weaknessStack.push(weaknessCard); }
+            
+            this.superVillainStack = allCards.filter(c => c.type === 'Super-Villain');
+            this.shuffle(this.superVillainStack);
+            
+            initializeAbilitySystem(this);
+            
+            this.refillLineUp();
+            for (let i = 0; i < 5; i++) {
+                this.drawCard(false);
+            }
+            this.renderAll();
+        }
+
+        endTurn() {
+            this.player.discard.push(...this.player.hand, ...this.player.played);
+            this.player.hand = [];
+            this.player.played = [];
+            this.player.power = 0;
+            this.player.firstPlaysThisTurn.clear();
+            this.player.cardsPlayedThisTurn = [];
+            this.player.cardsGainedThisTurn = [];
+            this.player.activeTurnEffects = [];
+            
+            this.lineUp = this.lineUp.filter(card => card !== null);
+            this.refillLineUp();
+            
+            for (let i = 0; i < 5; i++) {
+                this.drawCard(false);
+            }
+            this.renderAll();
+        }
+
+        async playCardFromHand(cardId) {
+            const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
+            if (cardIndex === -1) return;
+
+            const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
+            
+            if (cardToPlay.type === 'Location') {
+                this.player.locations.push(cardToPlay);
+            } else {
+                this.player.played.push(cardToPlay);
+            }
+            
+            this.player.cardsPlayedThisTurn.push(cardToPlay);
+            this.player.power += cardToPlay.power || 0;
+            
+            this.events.dispatch('cardPlayed', { card: cardToPlay, game: this });
+
+            await this.executeCardEffects(cardToPlay);
+            this.renderAll();
+        }
+        
+        // --- Metody Obsługi Efektów i Zdarzeń ---
+
+        async executeCardEffects(card) {
+            if (!card.effect_tags || card.effect_tags.length === 0) return;
+
+            for (const tag of card.effect_tags) {
+                const [effectName, ...params] = tag.split(':');
+                if (effectHandlers[effectName]) {
+                    await effectHandlers[effectName](this, params);
+                } else {
+                    console.warn(`Nieznany tag efektu: ${effectName}`);
+                }
+            }
+        }
+
+        async processAttack(attackString) {
+            const defenseCards = this.player.hand.filter(card => card.effect_tags.some(tag => tag.startsWith('defense_effect')));
+            let defenseUsed = false;
+
+            if (defenseCards.length > 0) {
+                const chosenDefenseCard = await this.ui.cardSelectionModal.waitForSelection(translations[this.currentLanguage].defendPrompt, defenseCards);
+                if (chosenDefenseCard) {
+                    const defenseTag = chosenDefenseCard.effect_tags.find(tag => tag.startsWith('defense_effect'));
+                    const [effectName, ...params] = defenseTag.split(':');
+                    if (effectHandlers[effectName]) {
+                        await effectHandlers[effectName](this, chosenDefenseCard, params);
+                    }
+                    defenseUsed = true;
+                }
+            }
+
+            if (!defenseUsed) {
+                console.log("Obrona nie została użyta. Efekt ataku przechodzi.");
+                switch (attackString) {
+                    case 'each_opponent_gains_weakness':
+                        this.gainWeakness();
+                        break;
+                    case 'each_opponent_discards_card_from_hand_choice':
+                        if (this.player.hand.length === 0) {
+                            console.log("Ręka jest pusta, atak nie ma efektu.");
+                            break;
+                        }
+                        const cardToDiscard = await this.ui.cardSelectionModal.waitForSelection(
+                            "Atak! Wybierz kartę do odrzucenia:",
+                            this.player.hand
+                        );
+                        if (cardToDiscard) {
+                            const cardIndex = this.player.hand.findIndex(c => c === cardToDiscard);
+                            if (cardIndex > -1) {
+                                const [discardedCard] = this.player.hand.splice(cardIndex, 1);
+                                this.player.discard.push(discardedCard);
+                                console.log(`Odrzucono w wyniku ataku: ${discardedCard[`name_${this.currentLanguage}`]}`);
+                            }
+                        }
+                        break;
+                    default:
+                        console.warn(`Nieobsługiwany atak: ${attackString}`);
+                }
+            } else {
+                console.log("Atak został zablokowany przez obronę.");
+            }
+            this.renderAll();
+        }
+        
+        // --- Metody Akcji Gracza (Kupowanie, Zdobywanie Kart) ---
+
+        async gainCard(card, sourcePile, sourceIndex = -1) {
+            if (sourcePile) {
+                if (sourceIndex > -1) {
+                    sourcePile.splice(sourceIndex, 1);
+                } else {
+                    sourcePile.pop();
+                }
+            }
+            this.player.discard.push(card);
+            this.player.cardsGainedThisTurn.push(card);
+            this.events.dispatch('cardGained', { card: card, game: this });
+            if (sourcePile === this.lineUp) {
+                this.refillLineUp();
+            }
+        }
+
+        async buyCardFromLineUp(cardId) {
+            const cardIndex = this.lineUp.findIndex(c => c && c.id === cardId);
+            if (cardIndex === -1) return;
+
+            const cardToBuy = this.lineUp[cardIndex];
+            if (this.player.power >= cardToBuy.cost) {
+                this.player.power -= cardToBuy.cost;
+                await this.gainCard(cardToBuy, this.lineUp, cardIndex);
+                this.renderAll();
+            }
+        }
+
+        async buyKickCard() {
+            if (this.kickStack.length === 0) return;
+            const kickCard = this.kickStack[0];
+            if (this.player.power >= kickCard.cost) {
+                this.player.power -= kickCard.cost;
+                await this.gainCard(kickCard, this.kickStack);
+                this.renderAll();
+            }
+        }
+
+        async defeatSuperVillain() {
+            if (this.superVillainStack.length === 0) return;
+            const sv = this.superVillainStack[this.superVillainStack.length - 1];
+            if (this.player.power >= sv.cost) {
+                this.player.power -= sv.cost;
+                await this.gainCard(sv, this.superVillainStack);
+                this.renderAll();
+            }
+        }
+
+        // --- Metody Pomocnicze i Debugowania ---
+
+        shuffle(deck) {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+        }
+
+        refillLineUp() {
+            while (this.lineUp.filter(c => c).length < 5 && this.mainDeck.length > 0) {
+                const emptyIndex = this.lineUp.findIndex(c => c === null);
+                if (emptyIndex !== -1) {
+                    this.lineUp[emptyIndex] = this.mainDeck.pop();
+                } else {
+                    this.lineUp.push(this.mainDeck.pop());
+                }
+            }
+        }
+
+        shuffleDiscardIntoDeck() {
+            if (this.player.discard.length > 0) {
+                this.player.deck.push(...this.player.discard);
+                this.player.discard = [];
+                this.shuffle(this.player.deck);
+            }
+        }
+
+        drawCard(render = true) {
+            if (this.player.deck.length === 0) {
+                this.shuffleDiscardIntoDeck();
+            }
+            if (this.player.deck.length > 0) {
+                this.player.hand.push(this.player.deck.pop());
+            }
+            if (render) {
+                this.renderAll();
+            }
+        }
+
+        gainWeakness() {
+            if (this.weaknessStack.length > 0) {
+                this.player.discard.push(this.weaknessStack.pop());
+            }
+        }
+
+        addCardById(cardId, dest) {
+            const card = allCards.find(c => c.id === cardId);
+            if (!card) return;
+
+            if (dest === 'hand') {
+                this.player.hand.push(card);
+            } else if (dest === 'lineup') {
+                this.lineUp.push(card);
+            }
+            this.renderAll();
+        }
+
+        destroyCardFromHand(cardId) {
+            const cardIndex = this.player.hand.findIndex(card => card.id === cardId);
+            if (cardIndex > -1) {
+                const [destroyedCard] = this.player.hand.splice(cardIndex, 1);
+                this.destroyedPile.push(destroyedCard);
+                this.renderAll();
+            }
+        }
+        
+        // --- Metody UI i Renderowania ---
+
+        _initializeUI() {
             this.ui = {
                 playerHand: document.querySelector('#player-hand-area .card-row'),
                 playerDeck: document.querySelector('#player-deck-area .card-stack'),
@@ -54,438 +347,187 @@ document.addEventListener('DOMContentLoaded', () => {
                 weaknessStack: document.querySelector('#weakness-stack-area .card-stack'),
                 superVillainStack: document.querySelector('#super-villain-stack-area .card-stack'),
                 powerTotal: document.getElementById('power-total'),
-                deckCount: document.getElementById('deck-count'),
-                discardCount: document.getElementById('discard-count'),
-                choiceModal: { element: document.getElementById('choice-modal'), title: document.getElementById('choice-modal-title'), cardDisplay: document.getElementById('choice-card-display'), text: document.getElementById('choice-modal-text'), yesBtn: document.getElementById('choice-yes-btn'), noBtn: document.getElementById('choice-no-btn'), waitForChoice: (prompt, card) => { return new Promise(resolve => { this.ui.choiceModal.text.textContent = prompt; if (card) { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.cardDisplay.style.display = 'block'; } else { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.style.display = 'none'; } this.ui.choiceModal.element.classList.add('active'); const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); }; this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true }); this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true }); }); } },
-                cardSelectionModal: { element: document.getElementById('card-selection-modal'), title: document.getElementById('selection-modal-title'), cardList: document.getElementById('selection-card-list'), waitForSelection: (prompt, cardsToChooseFrom) => { return new Promise(resolve => { this.ui.cardSelectionModal.title.textContent = prompt; this.ui.cardSelectionModal.cardList.innerHTML = ''; const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); }; cardsToChooseFrom.forEach(card => { const cardElement = this.createCardElement(card, 'selection'); cardElement.addEventListener('click', (event) => { event.stopPropagation(); resolvePromise(card) }); this.ui.cardSelectionModal.cardList.appendChild(cardElement); }); const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) { resolvePromise(null); } }; this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler); this.ui.cardSelectionModal.element.classList.add('active'); }); } }
+                choiceModal: {
+                    element: document.getElementById('choice-modal'),
+                    title: document.getElementById('choice-modal-title'),
+                    cardDisplay: document.getElementById('choice-card-display'),
+                    text: document.getElementById('choice-modal-text'),
+                    yesBtn: document.getElementById('choice-yes-btn'),
+                    noBtn: document.getElementById('choice-no-btn'),
+                    waitForChoice: (prompt, card) => new Promise(resolve => {
+                        this.ui.choiceModal.text.textContent = prompt;
+                        if (card) { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.appendChild(this.createCardElement(card, 'choice')); this.ui.choiceModal.cardDisplay.style.display = 'block'; } else { this.ui.choiceModal.cardDisplay.innerHTML = ''; this.ui.choiceModal.cardDisplay.style.display = 'none'; }
+                        this.ui.choiceModal.element.classList.add('active');
+                        const resolvePromise = (choice) => { this.ui.choiceModal.element.classList.remove('active'); resolve(choice); };
+                        this.ui.choiceModal.yesBtn.addEventListener('click', () => resolvePromise('yes'), { once: true });
+                        this.ui.choiceModal.noBtn.addEventListener('click', () => resolvePromise('no'), { once: true });
+                    })
+                },
+                cardSelectionModal: {
+                    element: document.getElementById('card-selection-modal'),
+                    title: document.getElementById('selection-modal-title'),
+                    cardList: document.getElementById('selection-card-list'),
+                    waitForSelection: (prompt, cards) => new Promise(resolve => {
+                        this.ui.cardSelectionModal.title.textContent = prompt;
+                        this.ui.cardSelectionModal.cardList.innerHTML = '';
+                        const resolvePromise = (card) => { this.ui.cardSelectionModal.element.classList.remove('active'); this.ui.cardSelectionModal.element.removeEventListener('click', closeModalHandler); resolve(card); };
+                        cards.forEach(card => {
+                            const cardEl = this.createCardElement(card, 'selection');
+                            cardEl.addEventListener('click', (e) => { e.stopPropagation(); resolvePromise(card); });
+                            this.ui.cardSelectionModal.cardList.appendChild(cardEl);
+                        });
+                        const closeModalHandler = (e) => { if (e.target === this.ui.cardSelectionModal.element) resolvePromise(null); };
+                        this.ui.cardSelectionModal.element.addEventListener('click', closeModalHandler);
+                        this.ui.cardSelectionModal.element.classList.add('active');
+                    })
+                }
             };
         }
         
-        shuffle(deck) { for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[deck[i], deck[j]] = [deck[j], deck[i]]; } }
-        
-        resetState() {
-            this.player = { superhero: null, deck: [], hand: [], discard: [], locations: [], played: [], power: 0, firstPlaysThisTurn: new Set(), cardsPlayedThisTurn: [], cardsGainedThisTurn: [], activeTurnEffects: [] };
-            Object.values(this.ui).forEach(zone => { if (zone.id !== 'power-total' && zone.element === undefined && !zone.id?.endsWith('-count')) zone.innerHTML = ''; });
+        handleCardClick(cardData, loc) {
+            if (loc === 'hand') { this.playCardFromHand(cardData.id); } 
+            else if (loc === 'lineup') { this.buyCardFromLineUp(cardData.id); } 
+            else if (loc === 'kick') { this.buyKickCard(); } 
+            else if (loc === 'super-villain') { this.defeatSuperVillain(); }
         }
 
-        setupNewGame() {
-            this.resetState();
-            const superheroes = allCards.filter(c => c.type === 'Super-Hero');
-            this.player.superhero = superheroes[Math.floor(Math.random() * superheroes.length)];
-            for (let i = 0; i < 7; i++) this.player.deck.push(allCards.find(c => c.id === 'punch'));
-            for (let i = 0; i < 3; i++) this.player.deck.push(allCards.find(c => c.id === 'vulnerability'));
-            this.shuffle(this.player.deck);
-            deckComposition.forEach(item => {
-                const cardInfo = allCards.find(c => c.id === item.id);
-                if (cardInfo && !['Starter', 'Kick', 'Weakness', 'Super-Villain', 'Super-Hero'].includes(cardInfo.type)) {
-                    for (let i = 0; i < item.count; i++) this.mainDeck.push(cardInfo);
-                }
-            });
-            this.shuffle(this.mainDeck);
-            const kickCard = allCards.find(c => c.id === 'kick');
-            const weaknessCard = allCards.find(c => c.id === 'weakness');
-            for (let i = 0; i < 16; i++) this.kickStack.push(kickCard);
-            for (let i = 0; i < 20; i++) this.weaknessStack.push(weaknessCard);
-            const svCards = allCards.filter(c => c.type === 'Super-Villain' && c.id !== 'ras_al_ghul');
-            this.shuffle(svCards); 
-            this.superVillainStack = svCards.slice(0, 7);
-            this.superVillainStack.push(allCards.find(c => c.id === 'ras_al_ghul'));
-            this.refillLineUp();
-            for(let i = 0; i < 5; i++) { this.drawCard(false); }
-            this.renderAll();
-        }
-
-        endTurn() {
-            this.player.discard.push(...this.player.hand);
-            this.player.discard.push(...this.player.played);
-            this.player.hand = []; this.player.played = []; this.player.power = 0;
-            this.player.firstPlaysThisTurn.clear();
-            this.player.cardsPlayedThisTurn = [];
-            this.player.cardsGainedThisTurn = [];
-            this.player.activeTurnEffects = [];
-            
-            this.lineUp = this.lineUp.filter(card => card !== null);
-            this.refillLineUp();
-            
-            if (this.superVillainStack.length === 0) { this.endGame("Pokonano ostatniego Super-Złoczyńcę!"); return; }
-            if (this.lineUp.length < 5 && this.mainDeck.length === 0) { this.endGame("Nie można uzupełnić Line-Upu!"); return; }
-
-            for(let i = 0; i < 5; i++) { this.drawCard(false); }
-            this.renderAll();
-        }
-
-        calculateVictoryPoints() {
-            const allPlayerCards = [ ...this.player.deck, ...this.player.hand, ...this.player.discard, ...this.player.played, ...this.player.locations ];
-            let finalVp = 0;
-            const cardCounts = {};
-            allPlayerCards.forEach(card => {
-                cardCounts[card.type] = (cardCounts[card.type] || 0) + 1;
-            });
-            allPlayerCards.forEach(card => {
-                let cardVp = card.vp || 0;
-                if (card.effect_tags) {
-                    card.effect_tags.forEach(tag => {
-                        if (tag.startsWith('vp_endgame_conditional')) {
-                            const match = tag.match(/if_(.*)_count_ge_(\d+)_then_set_vp_(\d+)/);
-                            if (match) {
-                                const [, type, countStr, vpStr] = match;
-                                const requiredCount = parseInt(countStr, 10);
-                                const newVp = parseInt(vpStr, 10);
-                                if (card.id === 'utility_belt' && (cardCounts['Equipment'] || 0) >= requiredCount + 1) {
-                                    cardVp = newVp;
-                                }
-                            }
-                        }
-                    });
-                }
-                finalVp += cardVp;
-            });
-            return finalVp;
-        }
-
-        endGame(reason) {
-            const finalScore = this.calculateVictoryPoints();
-            setTimeout(() => {
-                alert(`Koniec gry!\n${reason}\n\nTwój wynik: ${finalScore} PZ`);
-            }, 100);
-        }
-
-        refillLineUp() {
-            while (this.lineUp.length < 5 && this.mainDeck.length > 0) {
-                this.lineUp.push(this.mainDeck.pop());
-            }
-        }
-
-        shuffleDiscardIntoDeck() {
-            if (this.player.discard.length > 0) {
-                this.player.deck = [...this.player.deck, ...this.player.discard];
-                this.player.discard = [];
-                this.shuffle(this.player.deck);
-            }
-        }
-        
-        async executeCardEffects(card) {
-            if (!card.effect_tags || card.effect_tags.length === 0) return;
-            for (const tag of card.effect_tags) {
-                const [effectName, ...params] = tag.split(':');
-                if (effectHandlers[effectName]) {
-                    await effectHandlers[effectName](this, params);
-                } else {
-                    console.warn(`Nieznany tag efektu: ${effectName}`);
-                }
-            }
-        }
-
-        checkOngoingEffects(playedCard) {
-            const playedType = playedCard.type.toLowerCase();
-            if (this.player.firstPlaysThisTurn.has(playedType)) { return; }
-            this.player.locations.forEach(location => {
-                location.effect_tags.forEach(tag => {
-                    const match = tag.match(/on_play_first_(.*)_per_turn_draw_1/);
-                    if (match) {
-                        const triggerType = match[1].toLowerCase();
-                        if (triggerType === playedType) {
-                            this.drawCard(false);
-                        }
-                    }
-                });
-            });
-            this.player.firstPlaysThisTurn.add(playedType);
-        }
-
-        async playCardFromHand(cardId) {
-            const cardIndex = this.player.hand.findIndex(c => c.id === cardId);
-            if (cardIndex === -1) return;
-            const [cardToPlay] = this.player.hand.splice(cardIndex, 1);
-            this.player.cardsPlayedThisTurn.push(cardToPlay);
-            if (cardToPlay.type === 'Location') {
-                this.player.locations.push(cardToPlay);
-            } else {
-                this.player.played.push(cardToPlay);
-                this.checkOngoingEffects(cardToPlay);
-            }
-            this.player.power += cardToPlay.power || 0;
-            await this.executeCardEffects(cardToPlay);
-            this.renderAll();
-        }
-
-        async buyCard(card, sourcePile, sourceIndex = -1) {
-            this.player.power -= card.cost;
-            this.player.cardsGainedThisTurn.push(card);
-            const gainModifier = this.player.activeTurnEffects.find(eff => eff.type === 'modify_gain_destination');
-            let destination = 'discard';
-            if (gainModifier) {
-                if (gainModifier.optional) {
-                    const choice = await this.ui.choiceModal.waitForChoice(`Położyć "${card[`name_${currentLanguage}`]}" na wierzchu talii?`, card);
-                    if (choice === 'yes') {
-                        destination = gainModifier.destination;
-                    }
-                } else {
-                    destination = gainModifier.destination;
-                }
-            }
-            if (destination === 'deck_top') {
-                this.player.deck.push(card);
-            } else {
-                this.player.discard.push(card);
-            }
-            if (sourcePile === this.lineUp) {
-                sourcePile[sourceIndex] = null;
-            } else if (sourcePile) {
-                sourcePile.pop();
-            }
-        }
-
-        async buyCardFromLineUp(cardId) {
-            const cardIndex = this.lineUp.findIndex(c => c && c.id === cardId);
-            if (cardIndex === -1) return;
-            const cardToBuy = this.lineUp[cardIndex];
-            if (this.player.power >= cardToBuy.cost) {
-                await this.buyCard(cardToBuy, this.lineUp, cardIndex);
-                this.renderAll();
-            }
-        }
-
-        async buyKickCard() {
-            if (this.kickStack.length === 0) return;
-            const kickCard = this.kickStack[0];
-            if (this.player.power >= kickCard.cost) {
-                await this.buyCard(this.kickStack[this.kickStack.length - 1], this.kickStack);
-                this.renderAll();
-            }
-        }
-        
-        async defeatSuperVillain() {
-            if (this.superVillainStack.length === 0) return;
-            const superVillain = this.superVillainStack[this.superVillainStack.length - 1];
-            if (this.player.power >= superVillain.cost) {
-                const defeatedSV = this.superVillainStack.pop();
-                await this.buyCard(defeatedSV, null);
-                if (this.superVillainStack.length > 0) {
-                    const nextSuperVillain = this.superVillainStack[this.superVillainStack.length - 1];
-                    if (nextSuperVillain.effect_tags) {
-                        for (const tag of nextSuperVillain.effect_tags) {
-                            if (tag.startsWith('first_appearance_attack')) {
-                                const [effectName, ...params] = tag.split(':');
-                                if (effectHandlers[effectName]) {
-                                    await effectHandlers[effectName](this, params);
-                                }
-                            }
-                        }
-                    }
-                }
-                this.renderAll();
-            }
-        }
-        
-        drawCard(render = true) {
-            if (this.player.deck.length === 0) { this.shuffleDiscardIntoDeck(); }
-            if (this.player.deck.length > 0) {
-                const drawnCard = this.player.deck.pop();
-                if (drawnCard) this.player.hand.push(drawnCard);
-            }
-            if (render) this.renderAll();
-        }
-
-        async gainCard(card, sourcePile) {
-            this.player.cardsGainedThisTurn.push(card);
-            const gainModifier = this.player.activeTurnEffects.find(eff => eff.type === 'modify_gain_destination');
-            let destination = 'discard';
-            if (gainModifier && gainModifier.optional) {
-                const choice = await this.ui.choiceModal.waitForChoice(`Położyć "${card[`name_${currentLanguage}`]}" na wierzchu talii?`, card);
-                if (choice === 'yes') {
-                    destination = gainModifier.destination;
-                }
-            }
-            if (destination === 'deck_top') {
-                this.player.deck.push(card);
-            } else {
-                this.player.discard.push(card);
-            }
-            const cardIndex = sourcePile.findIndex(c => c === card);
-            if (cardIndex > -1) {
-                if (sourcePile === this.lineUp) {
-                    sourcePile[cardIndex] = null;
-                } else {
-                    sourcePile.splice(cardIndex, 1);
-                }
-            }
-        }
-
-        addCardById(cardId, destination) {
-            const card = allCards.find(c => c.id === cardId);
-            if (!card) { return; }
-            if (destination === 'hand') { this.player.hand.push(card); }
-            else if (destination === 'lineup') { this.lineUp.push(card); }
-        }
-
-        destroyCardFromHand(cardId) {
-            const cardIndex = this.player.hand.findIndex(card => card.id === cardId);
-            if (cardIndex > -1) {
-                const [destroyedCard] = this.player.hand.splice(cardIndex, 1);
-                this.destroyedPile.push(destroyedCard);
-            }
-        }
-        
         createCardElement(cardData, location) {
             if (!cardData) {
-                const placeholder = document.createElement('div');
-                placeholder.className = 'card-placeholder';
-                placeholder.textContent = translations[currentLanguage].emptySlot;
-                return placeholder;
+                const p = document.createElement('div');
+                p.className = 'card-placeholder';
+                p.textContent = translations[this.currentLanguage].emptySlot;
+                return p;
             }
             const cardDiv = document.createElement('div');
             cardDiv.className = 'card';
             cardDiv.dataset.id = cardData.id;
-            const cardName = cardData[`name_${currentLanguage}`] || cardData.name_en;
+            const cardName = cardData[`name_${this.currentLanguage}`] || cardData.name_en;
             if (location !== 'selection' && location !== 'choice') {
-                if ((location === 'lineup' || location === 'super-villain' || location === 'kick') && this.player.power < cardData.cost) {
+                if ((['lineup', 'super-villain', 'kick'].includes(location)) && this.player.power < cardData.cost) {
                     cardDiv.classList.add('unaffordable');
                 } else {
-                    cardDiv.addEventListener('click', (event) => {
-                        event.stopPropagation();
+                    cardDiv.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         this.handleCardClick(cardData, location);
                     });
                 }
             }
             if (!['deck', 'main-deck', 'choice', 'selection'].includes(location)) {
-                cardDiv.addEventListener('contextmenu', (event) => {
-                    event.preventDefault();
+                cardDiv.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
                     cardInspector.style.backgroundImage = `url('${cardData.image_path}')`;
                     cardInspector.classList.add('visible');
                 });
             }
-            if (['deck', 'main-deck'].includes(location)) { 
+            if (['deck', 'main-deck'].includes(location)) {
                 cardDiv.classList.add('is-face-down');
-            } else { 
-                cardDiv.style.backgroundImage = `url('${cardData.image_path}')`; 
+            } else {
+                cardDiv.style.backgroundImage = `url('${cardData.image_path}')`;
                 cardDiv.textContent = cardName;
             }
             return cardDiv;
         }
-        
-        handleCardClick(cardData, location) {
-            if (location === 'hand') { this.playCardFromHand(cardData.id); }
-            else if (location === 'lineup') { this.buyCardFromLineUp(cardData.id); }
-            else if (location === 'super-villain') { this.defeatSuperVillain(); }
-            else if (location === 'kick') { this.buyKickCard(); }
-        }
 
         renderAll() {
-            Object.values(this.ui).forEach(zone => { 
-                if (zone && !zone.id?.endsWith('-count') && zone.id !== 'power-total' && zone.element === undefined) {
-                    zone.innerHTML = ''; 
-                }
-            });
+            const zones = [this.ui.playerHand, this.ui.playedCards, this.ui.playerLocations, this.ui.lineUp, this.ui.playerDeck, this.ui.playerDiscard, this.ui.destroyedPile, this.ui.playerSuperhero, this.ui.mainDeck, this.ui.kickStack, this.ui.weaknessStack, this.ui.superVillainStack];
+            zones.forEach(zone => { zone.innerHTML = ''; });
+
             this.player.hand.forEach(card => this.ui.playerHand.appendChild(this.createCardElement(card, 'hand')));
             this.player.played.forEach(card => this.ui.playedCards.appendChild(this.createCardElement(card, 'played')));
             this.player.locations.forEach(card => this.ui.playerLocations.appendChild(this.createCardElement(card, 'location')));
             this.lineUp.forEach(card => this.ui.lineUp.appendChild(this.createCardElement(card, 'lineup')));
-            if (this.player.deck.length > 0) this.ui.playerDeck.appendChild(this.createCardElement(this.player.deck[0], 'deck'));
+            if (this.player.deck.length > 0) this.ui.playerDeck.appendChild(this.createCardElement(this.player.deck[this.player.deck.length - 1], 'deck'));
             if (this.player.discard.length > 0) this.ui.playerDiscard.appendChild(this.createCardElement(this.player.discard[this.player.discard.length - 1], 'discard'));
             if (this.destroyedPile.length > 0) this.ui.destroyedPile.appendChild(this.createCardElement(this.destroyedPile[this.destroyedPile.length - 1], 'destroyed'));
             if (this.player.superhero) this.ui.playerSuperhero.appendChild(this.createCardElement(this.player.superhero, 'superhero'));
-            if (this.mainDeck.length > 0) this.ui.mainDeck.appendChild(this.createCardElement(this.mainDeck[0], 'main-deck'));
             if (this.kickStack.length > 0) this.ui.kickStack.appendChild(this.createCardElement(this.kickStack[0], 'kick'));
             if (this.weaknessStack.length > 0) this.ui.weaknessStack.appendChild(this.createCardElement(this.weaknessStack[0], 'weakness'));
             if (this.superVillainStack.length > 0) this.ui.superVillainStack.appendChild(this.createCardElement(this.superVillainStack[this.superVillainStack.length - 1], 'super-villain'));
             
             this.ui.powerTotal.textContent = this.player.power;
-            this.ui.deckCount.textContent = this.player.deck.length;
-            this.ui.discardCount.textContent = this.player.discard.length;
         }
     }
 
-    let game;
-    const startScreen = document.getElementById('start-screen');
-    const gameScreen = document.getElementById('game-screen');
-    const newGameBtn = document.getElementById('new-game-btn');
-    const settingsBtn = document.getElementById('settings-btn');
-    const endTurnBtn = document.getElementById('end-turn-btn');
-    const cardIdModal = document.getElementById('card-id-modal');
-    const cardIdSubmitBtn = document.getElementById('card-id-submit');
-    const debugPanel = document.getElementById('debug-panel');
-    const languageSelect = document.getElementById('language-select');
-    let cardIdModalCallback = null;
-
-    function showScreen(screenToShow) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); screenToShow.classList.add('active'); }
+    // --- Funkcje Pomocnicze Poza Klasą ---
+    function showScreen(screen) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        screen.classList.add('active');
+    }
     function showModal(modal) { modal.classList.add('active'); }
     function hideModal(modal) { modal.classList.remove('active'); }
     
     function populateCardSelect(filterFn = () => true) {
-        const cardSelectList = cardIdModal.querySelector('#card-select-list');
-        cardSelectList.innerHTML = '';
-        const cardSource = allCards.filter(filterFn).sort((a, b) => (a[`name_${currentLanguage}`] || a.name_en).localeCompare(b[`name_${currentLanguage}`] || b.name_en));
-        cardSource.forEach(card => {
-            const option = document.createElement('option');
-            option.value = card.id;
-            option.textContent = `${card[`name_${currentLanguage}`] || card.name_en} [${card.type}]`;
-            cardSelectList.appendChild(option);
-        });
+        const list = cardIdModal.querySelector('#card-select-list');
+        list.innerHTML = '';
+        const lang = game ? game.currentLanguage : 'pl';
+        allCards.filter(filterFn)
+            .sort((a, b) => (a[`name_${lang}`] || a.name_en).localeCompare(b[`name_${lang}`] || b.name_en))
+            .forEach(card => {
+                const opt = document.createElement('option');
+                opt.value = card.id;
+                opt.textContent = `${(card[`name_${lang}`] || card.name_en)} [${card.type}]`;
+                list.appendChild(opt);
+            });
+    }
+    
+    // --- Główna Logika Startowa Aplikacji ---
+    async function main() {
+        if (!newGameBtn) {
+            console.error("Błąd krytyczny: Nie znaleziono przycisku 'new-game-btn'. Sprawdź ID w pliku HTML.");
+            return;
+        }
+        newGameBtn.disabled = true;
+        try {
+            const [cardsRes, compoRes] = await Promise.all([fetch('cards.json'), fetch('deck_composition.json')]);
+            allCards = await cardsRes.json();
+            deckComposition = await compoRes.json();
+            newGameBtn.disabled = false;
+        } catch (error) {
+            console.error("Błąd ładowania danych gry:", error);
+        }
     }
 
+    // --- Dowiązanie Event Listenerów ---
+    document.addEventListener('click', () => cardInspector.classList.remove('visible'));
+    newGameBtn.addEventListener('click', () => { showScreen(gameScreen); game = new Game(); game.setupNewGame(); });
+    settingsBtn.addEventListener('click', () => showModal(document.getElementById('settings-modal')));
+    endTurnBtn.addEventListener('click', () => { if (game) game.endTurn(); });
+    languageSelect.addEventListener('change', (e) => { if (game) game.setLanguage(e.target.value); });
+    
     debugPanel.addEventListener('click', (e) => {
         if (e.target.tagName !== 'BUTTON' || !game) return;
         const action = e.target.dataset.debug;
         switch (action) {
-            case 'draw-card': game.drawCard(); return;
-            case 'add-power': game.player.power++; game.renderAll(); return;
-            case 'remove-power': if (game.player.power > 0) game.player.power--; game.renderAll(); return;
+            case 'draw-card': game.drawCard(); break;
+            case 'add-power': game.player.power++; game.renderAll(); break;
             case 'add-card-hand':
-                populateCardSelect(card => card.type !== 'Super-Hero');
-                cardIdModalCallback = (cardId) => game.addCardById(cardId, 'hand');
-                showModal(cardIdModal); return; 
-            case 'add-card-lineup':
-                populateCardSelect(card => card.type !== 'Super-Hero');
-                cardIdModalCallback = (cardId) => game.addCardById(cardId, 'lineup');
-                showModal(cardIdModal); return;
+                populateCardSelect(c => c.type !== 'Super-Hero');
+                cardIdModalCallback = (id) => game.addCardById(id, 'hand');
+                showModal(cardIdModal);
+                break;
             case 'destroy-card':
-                if (game.player.hand.length === 0) { return; }
-                const uniqueHandCards = [...new Map(game.player.hand.map(item => [item['id'], item])).values()];
-                populateCardSelect(card => uniqueHandCards.some(handCard => handCard.id === card.id));
-                cardIdModalCallback = (cardId) => game.destroyCardFromHand(cardId);
-                showModal(cardIdModal); return;
-            case 'force-end-game':
-                game.endGame("Wymuszono koniec gry przez panel debugowania.");
-                return;
-            default: return;
+                if (game.player.hand.length > 0) {
+                    const unique = [...new Map(game.player.hand.map(item => [item.id, item])).values()];
+                    populateCardSelect(c => unique.some(h => h.id === c.id));
+                    cardIdModalCallback = (id) => game.destroyCardFromHand(id);
+                    showModal(cardIdModal);
+                }
+                break;
         }
     });
-    
+
     cardIdSubmitBtn.addEventListener('click', () => {
-        if (!cardIdModal.classList.contains('active')) return;
         const selectedId = cardIdModal.querySelector('#card-select-list').value;
         if (selectedId && cardIdModalCallback) {
             cardIdModalCallback(selectedId);
-            game.renderAll();
         }
         hideModal(cardIdModal);
         cardIdModalCallback = null;
     });
 
-    languageSelect.addEventListener('change', (e) => {
-        setLanguage(e.target.value);
-        if (game) {
-            game.renderAll();
-        }
+    document.querySelectorAll('.modal-overlay:not(#choice-modal):not(#card-selection-modal)').forEach(modal => {
+        modal.querySelector('.close-btn')?.addEventListener('click', () => hideModal(modal));
     });
-
-    async function main() {
-        document.querySelectorAll('.modal-overlay:not(#choice-modal):not(#card-selection-modal)').forEach(modal => {
-            modal.querySelector('.close-btn')?.addEventListener('click', () => hideModal(modal));
-        });
-        newGameBtn.disabled = true;
-        try {
-            const [cardsRes, compoRes] = await Promise.all([fetch('cards.json'), fetch('deck_composition.json')]);
-            allCards = await cardsRes.json(); deckComposition = await compoRes.json();
-            newGameBtn.disabled = false;
-        } catch (error) { console.error("Błąd ładowania danych gry:", error); }
-    }
     
-    newGameBtn.addEventListener('click', () => { showScreen(gameScreen); game = new Game(); game.setupNewGame(); });
-    settingsBtn.addEventListener('click', () => { showModal(document.getElementById('settings-modal'));});
-    endTurnBtn.addEventListener('click', () => { if (game) { game.endTurn(); } });
-    
-    setLanguage('pl');
     main();
 });

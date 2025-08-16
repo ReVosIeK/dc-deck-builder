@@ -1,0 +1,49 @@
+✅ Karty Zaimplementowane
+Te karty powinny działać w 100% zgodnie z ich opisem.
+
+Sprzęt (Equipment)
+Trójząb Aquamana (modify_gain_destination)
+
+Batmobil (conditional_effect:if_first_card_played...)
+
+Lasso Prawdy (defense_effect)
+
+Enty Metal (on_play_effect:reveal_deck_top_1...)
+
+Batsygnał (on_play_effect:move_card_from_discard...)
+
+Peleryna Superbohatera (defense_effect)
+
+Bohaterowie (Hero)
+Catwoman (brak efektu)
+
+Mroczny Rycerz (on_play_effect:gain_all_type... i on_play_effect:if_card_played_this_turn...)
+
+Kid Flash (draw:1)
+
+Mera (conditional_power:if_discard_pile_empty...)
+
+Robin (on_play_effect:move_card_from_discard...)
+
+Najszybszy Człowiek na Ziemi (draw:2)
+
+Łotrzy (Villain)
+Clayface (on_play_effect:play_again_card...)
+
+Strach na Wróble (attack:each_opponent_gains_weakness)
+
+Pingwin (draw:2 i then_discard_card)
+
+Lokacje (Location)
+Azyl Arkham (ongoing_triggered_ability)
+
+Forteca Samotności (ongoing_triggered_ability)
+
+Jaskinia Nietoperza (ongoing_triggered_ability)
+
+Obserwatorium (ongoing_triggered_ability)
+
+Wieża Tytanów (ongoing_triggered_ability)
+
+Inne
+Cios, Bezsilność, Kopniak, Słabość (brak złożonych efektów)

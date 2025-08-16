@@ -1,0 +1,58 @@
+⏳ Karty do Zrobienia
+Te karty posiadają efekty, których nasz silnik gry jeszcze nie rozumie.
+
+Sprzęt (Equipment)
+Łuk Green Arrowa: Brakuje efektu reduce_cost_to_defeat_sv_by_2_this_turn (tymczasowa zniżka na Super-Złoczyńców).
+
+Pierścień Mocy: Brakuje złożonej logiki warunkowej w on_play_effect (sprawdzenie kosztu odkrytej karty).
+
+Pas z gadżetami: Brakuje logiki punktacji na koniec gry (vp_endgame_conditional).
+
+Bohaterowie (Hero)
+Blue Beetle: Brakuje logiki obrony, która zatrzymuje kartę w ręce (keep_this).
+
+Szmaragdowy Wojownik: Brakuje bardzo złożonego efektu zagrania karty z Rzędu Kart, a następnie zwrócenia jej (play_card_from_lineup...).
+
+Green Arrow: Brakuje logiki punktacji na koniec gry (vp_endgame_conditional).
+
+High-Tech Hero: Brakuje nowego typu warunku w conditional_power (sprawdzenie typu zagranej karty).
+
+J'onn J'onzz: Brakuje efektu zagrania karty ze stosu Super-Złoczyńców.
+
+Król Atlantydy: Brakuje efektu z wyborem zniszczenia karty z odrzuconych (may_destroy_card_from_discard...).
+
+Człowiek ze Stali: Brakuje efektu, który przenosi wszystkie karty danego typu (move_all_cards_type...).
+
+Księżniczka Diana: Brakuje filtrowania po koszcie w efekcie gain_all_type....
+
+Supergirl: Brakuje mechaniki pobrania karty z konkretnego stosu (Kopniaków) do ręki.
+
+Potwór z Bagien: Brakuje nowego typu warunku (if_player_controls_type_location...).
+
+Zatanna Zatara: Brakuje mechaniki odkładania kart na spód talii (move_cards_from_discard_to_bottom_of_deck).
+
+Łotrzy (Villain)
+Bane: Brakuje nowego typu Ataku (zmuszenie do odrzucenia karty).
+
+Bizarro: Brakuje logiki punktacji na koniec gry.
+
+Cheetah: on_play_effect:gain_card_from_lineup... jest już zaimplementowany dzięki karcie Pingwin - tę kartę można przenieść do zaimplementowanych!
+
+Harley Quinn: Brakuje nowego typu Ataku (przeniesienie kart z odrzuconych na wierzch talii).
+
+Lobo: Brakuje efektu niszczenia kart z ręki lub stosu odrzuconych.
+
+Poison Ivy: Brakuje nowego typu Ataku (odrzucenie karty z talii i sprawdzenie jej kosztu).
+
+Solomon Grundy: Brakuje efektu aktywowanego przy zdobyciu karty (on_gain_or_buy).
+
+Starro: Brakuje nowego typu Ataku (zagranie odrzuconych kart przeciwnika).
+
+Suicide Squad: Brakuje warunku sprawdzającego liczbę zagranych kart o tej samej nazwie oraz logiki punktacji na koniec gry.
+
+Człowiek-Zagadka: Brakuje złożonego efektu z powtarzalną akcją (repeatable_action...).
+
+Two-Face: Brakuje efektu z wyborem parzyste/nieparzyste i sprawdzeniem kosztu.
+
+Super-Złoczyńcy i Superbohaterowie (zdolności stałe)
+Wszystkie karty Super-Złoczyńców i Superbohaterów (jako karty startowe) mają unikalne i złożone efekty (first_appearance_attack, player_ability), które wymagają osobnej implementacji.

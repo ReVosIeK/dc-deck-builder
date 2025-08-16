@@ -2,6 +2,9 @@
 
 export const translations = {
     en: {
+        // Defend, Ongoing
+        defendPrompt: "Choose a card to defend (or click the background):",
+        ongoingEffectLog: 'Ongoing effect from "{0}": Drawing 1 card for playing {1}.',
         // Start Screen
         newGame: "New Game",
         continueGame: "Continue Game",
@@ -44,6 +47,9 @@ export const translations = {
         selectCard: "Select a card"
     },
     pl: {
+        // Defend, Ongoing
+        defendPrompt: "Wybierz kartę, aby się obronić (lub kliknij tło):",
+        ongoingEffectLog: 'Efekt stały z "{0}": Dobranie 1 karty za zagranie {1}.',
         // Start Screen
         newGame: "Nowa Gra",
         continueGame: "Kontynuuj Grę",
